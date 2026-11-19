@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, saveSettings, loadNotifySettings, saveNotifySettings, NOTIFY_DAY_OPTIONS } from '../settings';
 import { setLanguage, type Lang } from '../i18n';
 import { setTheme, currentTheme, type Theme } from '../theme';
 import { db, exportData, importData, exportCsv } from '../db';
+import { rescheduleAllExpiries } from '../notify';
 import { useNav, useToast, useDataVersion } from '../store';
 import {
-  TopBar, Field, inputCls, BottomNav, Confirm, IconSparkle, IconBox,
+  TopBar, Field, inputCls, BottomNav, Confirm, IconSparkle, IconBox, IconClock,
 } from '../ui';
 
 export function SettingsScreen() {
@@ -19,6 +20,7 @@ export function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const [s, setS] = useState(loadSettings());
   const [theme, setThemeState] = useState<Theme>(currentTheme());
+  const [ns, setNs] = useState(loadNotifySettings());
   const [clearConfirm, setClearConfirm] = useState(false);
   const [importConfirm, setImportConfirm] = useState(false);
   const [importText, setImportText] = useState('');
@@ -34,6 +36,17 @@ export function SettingsScreen() {
   const pickTheme = (th: Theme) => {
     setThemeState(th);
     setTheme(th);
+  };
+
+  const updateNotify = (next: typeof ns) => {
+    setNs(next);
+    saveNotifySettings(next);
+    rescheduleAllExpiries();
+  };
+
+  const toggleNotifyDay = (d: number) => {
+    const days = ns.days.includes(d) ? ns.days.filter((x) => x !== d) : [...ns.days, d];
+    updateNotify({ ...ns, days: days.sort((a, b) => b - a) });
   };
 
   const shareOrDownload = async (content: string, fileName: string, mime: string, doneMsg: string) => {
@@ -133,6 +146,30 @@ export function SettingsScreen() {
               ))}
             </div>
           </Field>
+        </div>
+
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <IconClock className="w-5 h-5 text-brand-600" />
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('settings.notifyTitle')}</h2>
+          </div>
+          <Field label={t('settings.notifyTime')}>
+            <input className={inputCls} type="time" value={ns.time}
+              onChange={(e) => e.target.value && updateNotify({ ...ns, time: e.target.value })} />
+          </Field>
+          <Field label={t('settings.notifyDays')}>
+            <div className="flex gap-2">
+              {NOTIFY_DAY_OPTIONS.map((d) => (
+                <button key={d} onClick={() => toggleNotifyDay(d)}
+                  className={`flex-1 py-2.5 rounded-xl text-[13px] font-medium transition-colors ${
+                    ns.days.includes(d) ? 'bg-brand-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 active:bg-gray-200'
+                  }`}>
+                  {t(`settings.notifyDaysOpt.d${d}`)}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <p className="text-xs text-gray-400 mt-1 leading-relaxed">{t('settings.notifyHint')}</p>
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm mt-4">
