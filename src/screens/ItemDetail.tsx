@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db, pathOf, deleteItem, restoreDeleted, getItemImages, expiryDaysLeft, buildSearchText, invalidateItemsCache, adjustQuantity } from '../db';
 import { haptic } from '../haptics';
-import { cancelExpiry } from '../notify';
+import { cancelExpiry, rescheduleForItems } from '../notify';
 import type { Item, Category } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
 import { CategoryPicker } from '../CategoryPicker';
@@ -128,13 +128,13 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-snug">{item.name}</h2>
           <span className="shrink-0 flex items-center gap-1.5">
             <button aria-label={t('item.qtyDecrease')}
-              onClick={async () => { haptic(); const q = await adjustQuantity(item.id, -1); setItem({ ...item, quantity: q }); }}
+              onClick={async () => { haptic(); const q = await adjustQuantity(item.id, -1); setItem({ ...item, quantity: q }); bump(); }}
               className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-base leading-none">−</button>
             <span className="px-2.5 py-1 rounded-full bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-500 text-sm font-medium">
               ×{item.quantity}
             </span>
             <button aria-label={t('item.qtyIncrease')}
-              onClick={async () => { haptic(); const q = await adjustQuantity(item.id, 1); setItem({ ...item, quantity: q }); }}
+              onClick={async () => { haptic(); const q = await adjustQuantity(item.id, 1); setItem({ ...item, quantity: q }); bump(); }}
               className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-base leading-none">+</button>
           </span>
         </div>
@@ -246,7 +246,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
           nav.pop();
           toast(t('detail.deleted'), {
             label: t('common.undo'),
-            onClick: async () => { await restoreDeleted(snap); bump(); },
+            onClick: async () => { await restoreDeleted(snap); await rescheduleForItems(snap.items); bump(); },
           });
         }} />
     </div>

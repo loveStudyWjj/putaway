@@ -5,11 +5,6 @@ import type { LogEntry } from '../types';
 import { useNav } from '../store';
 import { TopBar, Empty } from '../ui';
 
-const ACTION_LABEL: Record<string, string> = {
-  save_item: '保存物品', delete_item: '删除物品', delete_items: '批量删除',
-  delete_cat: '删除目录', restore: '恢复删除', move_items: '移动物品',
-};
-
 /** 操作记录：最近 100 条写操作 */
 export function LogsScreen() {
   const { t, i18n } = useTranslation();
@@ -27,7 +22,7 @@ export function LogsScreen() {
               <span className="text-[11px] text-gray-400 shrink-0">
                 {new Date(r.ts).toLocaleString(locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </span>
-              <span className="text-xs font-medium text-brand-600 shrink-0">{ACTION_LABEL[r.action] ?? r.action}</span>
+              <span className="text-xs font-medium text-brand-600 shrink-0">{t(`logs.act_${r.action}`, r.action)}</span>
               <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{r.text}</span>
             </div>
           ))}

@@ -5,6 +5,7 @@ import type { TrashEntry } from '../types';
 import { useNav } from '../store';
 import { TopBar, Empty, Confirm, IconTrash } from '../ui';
 import { haptic } from '../haptics';
+import { rescheduleForItems } from '../notify';
 
 /** 回收站：删除快照列表，可恢复/彻底删除/清空 */
 export function TrashScreen() {
@@ -32,11 +33,11 @@ export function TrashScreen() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{e.name || '—'}</p>
                 <p className="text-[11px] text-gray-400">
-                  {kindLabel(e)} · {e.snap.items.length} 件 · {new Date(e.deletedAt).toLocaleDateString()}
+                  {kindLabel(e)} · {t('trash.itemsCount', { n: e.snap.items.length })} · {new Date(e.deletedAt).toLocaleDateString()}
                 </p>
               </div>
               <button className="text-xs text-brand-600 font-medium px-2 py-1"
-                onClick={async () => { await restoreTrash(e.id); invalidateItemsCache(); haptic('success'); void load(); }}>
+                onClick={async () => { await restoreTrash(e.id); await rescheduleForItems(e.snap.items); invalidateItemsCache(); haptic('success'); void load(); }}>
                 {t('trash.restore')}
               </button>
               <button className="text-xs text-red-500 px-2 py-1" onClick={() => setPurge(e)}>

@@ -5,7 +5,7 @@ import { useNav, useToast } from '../store';
 import { decodeQrFromImage, decodeQrFromVideo, parseQrText } from '../qr';
 import { TopBar, IconImage } from '../ui';
 import { haptic } from '../haptics';
-import { barcodeSupported, detectBarcodeFromVideo, lookupProduct, stashProduct } from '../barcode';
+import { barcodeSupported, detectBarcodeFromVideo, detectBarcodeFromImage, lookupProduct, stashProduct } from '../barcode';
 
 /** 扫码定位：目录二维码（找东西）+ 商品条码（建物品）双模式 */
 export function QrScanScreen() {
@@ -93,6 +93,10 @@ export function QrScanScreen() {
   };
 
   const pickImage = async (f: File) => {
+    if (mode === 'barcode' && canBarcode) {
+      const code = await detectBarcodeFromImage(f);
+      if (code) { await handleBarcode(code); return; }
+    }
     const text = await decodeQrFromImage(f);
     if (text) await handleText(text);
     else toast(t('scan.notFound'));

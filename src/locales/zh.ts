@@ -122,12 +122,16 @@ export default {
   widget: { stats: '过期 {{expired}} · 临期 {{soon}} · 借出 {{lent}} · 共 {{total}} 件' },
   trash: {
     title: '回收站', empty: '回收站是空的', hint: '删除的内容保留 30 天后自动清理',
-    restore: '恢复', purge: '彻底删除', emptyAll: '清空回收站',
+    restore: '恢复', purge: '彻底删除', emptyAll: '清空回收站', itemsCount: '{{n}} 件',
     batchName: '{{n}} 件物品', kindItem: '物品', kindItems: '物品批量', kindCategory: '目录',
     restored: '已恢复', purged: '已彻底删除', emptied: '回收站已清空',
     purgeConfirm: '彻底删除「{{name}}」？不可恢复', emptyConfirm: '清空回收站？内容将不可恢复',
   },
-  logs: { title: '操作记录', empty: '暂无记录' },
+  logs: {
+    title: '操作记录', empty: '暂无记录',
+    act_save_item: '保存物品', act_delete_item: '删除物品', act_delete_items: '批量删除',
+    act_delete_cat: '删除目录', act_restore: '恢复删除', act_move_items: '移动物品',
+  },
   attention: { title: '需要关注', expired: '已过期', soon: '临期', lent: '借出中' },
   item: { qtyDecrease: '减少数量', qtyIncrease: '增加数量' },
   barcode: {

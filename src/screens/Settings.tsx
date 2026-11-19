@@ -7,7 +7,7 @@ import { loadSettings, saveSettings, loadNotifySettings, saveNotifySettings, NOT
 import { setLanguage, type Lang } from '../i18n';
 import { setTheme, currentTheme, type Theme } from '../theme';
 import { db, exportData, importData, exportCsv } from '../db';
-import { rescheduleAllExpiries } from '../notify';
+import { rescheduleAllExpiries, cancelAllExpiries } from '../notify';
 import { useNav, useToast, useDataVersion } from '../store';
 import {
   TopBar, Field, inputCls, BottomNav, Confirm, IconSparkle, IconBox, IconClock,
@@ -106,7 +106,9 @@ export function SettingsScreen() {
     setBusy(true);
     setProgress(0);
     try {
+      await cancelAllExpiries();
       const r = await importData(importText, setProgress);
+      rescheduleAllExpiries();
       bump();
       toast(t('settings.imported', { cats: r.cats, items: r.items }));
       setImportConfirm(false);
@@ -275,6 +277,7 @@ export function SettingsScreen() {
         desc={t('settings.clearDesc')} okText={t('settings.clearOk')}
         onCancel={() => setClearConfirm(false)}
         onOk={async () => {
+          await cancelAllExpiries();
           await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear(), db.trash.clear(), db.logs.clear()]);
           bump();
           toast(t('settings.cleared'));

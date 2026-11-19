@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { db, pathTextFromMap, categoryMap, searchItems, searchCategories, thumbOf } from '../db';
+import { db, pathTextFromMap, categoryMap, searchItems, searchCategories, thumbOf, attentionItems } from '../db';
 import type { Item, Category } from '../types';
 import { useNav } from '../store';
 import { setHeroEl } from '../viewnav';
@@ -9,7 +9,7 @@ import { TopBar, IconSearch, IconBox, IconPin, IconClose, IconFolder, Empty, Bot
 // 模块级记忆上次搜索词：从底部导航重新进搜索页时恢复
 let lastQuery = '';
 
-export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
+export function SearchScreen({ initialQuery, filter }: { initialQuery?: string; filter?: 'expired' | 'soon' | 'lent' }) {
   const nav = useNav();
   const { t } = useTranslation();
   const [q, setQ] = useState(initialQuery ?? lastQuery);
@@ -25,8 +25,17 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     timer.current = setTimeout(async () => {
       lastQuery = q;
       const kw = q.trim();
-      if (!kw) { setResults([]); setCatResults([]); setSearched(false); return; }
-      const [list, cats, map] = await Promise.all([searchItems(kw), searchCategories(kw), categoryMap()]);
+      if (!kw && !filter) { setResults([]); setCatResults([]); setSearched(false); return; }
+      let list: Item[], cats: Category[];
+      const map = await categoryMap();
+      if (kw) {
+        [list, cats] = await Promise.all([searchItems(kw), searchCategories(kw)]);
+      } else {
+        // 关注聚合直达：输入为空但带 filter（首页「需要关注」芯片进入）
+        const a = await attentionItems();
+        list = a[filter!];
+        cats = [];
+      }
       setResults(list);
       setCatResults(cats);
       setSearched(true);
@@ -47,7 +56,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
         return urls;
       });
     }, 250);
-  }, [q]);
+  }, [q, filter]);
 
   useEffect(() => () => {
     Object.values(imgUrls).forEach((u) => URL.revokeObjectURL(u));
@@ -57,7 +66,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
-      <TopBar title={t('search.title')} onBack={nav.pop} />
+      <TopBar title={filter && !q ? t(`attention.${filter}`) : t('search.title')} onBack={nav.pop} />
 
       <div className="p-4">
         <div className="relative">

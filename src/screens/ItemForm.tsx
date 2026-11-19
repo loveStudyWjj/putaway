@@ -100,7 +100,7 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
         ...(p.category ? { category: p.category } : {}),
       },
     });
-    if (!p.name) toast(t('barcode.lookupFail'));
+    if (!p.name) toast(t(navigator.onLine === false ? 'barcode.offline' : 'barcode.lookupFail'));
   }, [item]);
 
   useEffect(

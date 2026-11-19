@@ -125,12 +125,16 @@ export default {
   widget: { stats: 'Expired {{expired}} · Expiring {{soon}} · Lent {{lent}} · {{total}} items' },
   trash: {
     title: 'Trash', empty: 'Trash is empty', hint: 'Deleted content is kept for 30 days',
-    restore: 'Restore', purge: 'Delete forever', emptyAll: 'Empty trash',
+    restore: 'Restore', purge: 'Delete forever', emptyAll: 'Empty trash', itemsCount: '{{n}} items',
     batchName: '{{n}} items', kindItem: 'Item', kindItems: 'Items', kindCategory: 'Folder',
     restored: 'Restored', purged: 'Deleted forever', emptied: 'Trash emptied',
     purgeConfirm: 'Permanently delete "{{name}}"? This cannot be undone', emptyConfirm: 'Empty the trash? Contents cannot be recovered',
   },
-  logs: { title: 'Activity log', empty: 'No activity yet' },
+  logs: {
+    title: 'Activity log', empty: 'No activity yet',
+    act_save_item: 'Saved item', act_delete_item: 'Deleted item', act_delete_items: 'Bulk deleted',
+    act_delete_cat: 'Deleted folder', act_restore: 'Restored', act_move_items: 'Moved items',
+  },
   attention: { title: 'Needs attention', expired: 'Expired', soon: 'Expiring', lent: 'Lent out' },
   item: { qtyDecrease: 'Decrease quantity', qtyIncrease: 'Increase quantity' },
   barcode: {

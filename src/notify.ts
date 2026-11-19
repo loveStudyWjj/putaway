@@ -72,3 +72,19 @@ export async function rescheduleAllExpiries(): Promise<void> {
     for (const it of items) await scheduleExpiry(it);
   } catch { /* ignore */ }
 }
+
+/** 撤销/回收站恢复后：为快照里带到期日的物品补排提醒 */
+export async function rescheduleForItems(items: Item[]): Promise<void> {
+  for (const it of items) if (it.expiryDate) await scheduleExpiry(it);
+}
+
+/** 清空/导入前：取消所有已排提醒（防幽灵通知） */
+export async function cancelAllExpiries(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const pend = await LocalNotifications.getPending();
+    if (pend.notifications.length) {
+      await LocalNotifications.cancel({ notifications: pend.notifications.map((n) => ({ id: n.id })) });
+    }
+  } catch { /* ignore */ }
+}

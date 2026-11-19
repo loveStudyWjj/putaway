@@ -26,6 +26,20 @@ export async function detectBarcodeFromVideo(video: HTMLVideoElement): Promise<s
   }
 }
 
+/** 从图片识别条码（相册选图路径） */
+export async function detectBarcodeFromImage(blob: Blob): Promise<string | null> {
+  const Ctor = (window as any).BarcodeDetector as BarcodeDetectorCtor | undefined;
+  if (!Ctor) return null;
+  try {
+    const bmp = await createImageBitmap(blob);
+    const res = await new Ctor({ formats: FORMATS }).detect(bmp);
+    bmp.close();
+    return res[0]?.rawValue ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ProductInfo {
   barcode: string;
   name?: string;

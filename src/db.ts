@@ -4,7 +4,7 @@ import i18n from './i18n';
 import type { Category, Item, ImageRec, TrashEntry, LogEntry } from './types';
 
 /** 生成物品搜索串：名称+完整拼音(带空格/连写)+首字母+描述+标签+属性+借出人 */
-export function buildSearchText(it: Pick<Item, 'name' | 'description' | 'tags' | 'attributes' | 'lentTo'>): string {
+export function buildSearchText(it: Pick<Item, 'name' | 'description' | 'tags' | 'attributes' | 'lentTo' | 'barcode'>): string {
   const name = it.name ?? '';
   let pyFull = '', pyJoin = '', pyFirst = '';
   try {
@@ -19,6 +19,7 @@ export function buildSearchText(it: Pick<Item, 'name' | 'description' | 'tags' |
     ...Object.keys(it.attributes ?? {}),
     ...Object.values(it.attributes ?? {}),
     it.lentTo ?? '',
+    it.barcode ?? '',
   ].join(' ').toLowerCase();
 }
 
@@ -73,6 +74,12 @@ class AppDB extends Dexie {
     this.version(4).stores({
       trash: 'id, deletedAt',
       logs: '++id, ts',
+    });
+    // v5：searchText 加入 barcode 字段，全量回填
+    this.version(5).upgrade(async (tx) => {
+      await tx.table('items').toCollection().modify((it: Item) => {
+        it.searchText = buildSearchText(it);
+      });
     });
   }
 }

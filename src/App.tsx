@@ -21,7 +21,7 @@ function ScreenView({ s }: { s: Screen }) {
     case 'item':
       return <ItemDetailScreen key={s.itemId} itemId={s.itemId} />;
     case 'search':
-      return <SearchScreen initialQuery={s.q} />;
+      return <SearchScreen initialQuery={s.q} filter={s.filter} />;
     case 'qrscan':
       return <QrScanScreen />;
     case 'settings':

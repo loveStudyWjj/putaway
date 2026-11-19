@@ -8,7 +8,7 @@ export type Screen =
   | { name: 'browse'; categoryId: string }
   | { name: 'itemForm'; itemId?: string; categoryId?: string; autoCapture?: boolean }
   | { name: 'item'; itemId: string }
-  | { name: 'search'; q?: string }
+  | { name: 'search'; q?: string; filter?: 'expired' | 'soon' | 'lent' }
   | { name: 'qrscan' }
   | { name: 'trash' }
   | { name: 'logs' }

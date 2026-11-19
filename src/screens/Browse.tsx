@@ -11,7 +11,7 @@ import {
   thumbOf, expiryState,
 } from '../db';
 import { compressImage, makeThumb } from '../image';
-import { cancelExpiry } from '../notify';
+import { cancelExpiry, rescheduleForItems } from '../notify';
 import { qrPngDataUrl, categoryQrText } from '../qr';
 import type { Category, Item } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
@@ -157,7 +157,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     nav.pop();
     toast(t('browse.deleted'), {
       label: t('common.undo'),
-      onClick: async () => { await restoreDeleted(snap); bump(); },
+      onClick: async () => { await restoreDeleted(snap); await rescheduleForItems(snap.items); bump(); },
     });
   };
 
@@ -258,7 +258,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     bump();
     toast(t('browse.deletedN', { count: snap.items.length }), {
       label: t('common.undo'),
-      onClick: async () => { await restoreDeleted(snap); bump(); },
+      onClick: async () => { await restoreDeleted(snap); await rescheduleForItems(snap.items); bump(); },
     });
   };
 
@@ -455,19 +455,19 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
               <p className="text-xs font-medium text-gray-400 mb-2">{t('attention.title')}</p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {attention.expired.length > 0 && (
-                  <button onClick={() => nav.push({ name: 'search', q: '' })}
+                  <button onClick={() => nav.push({ name: 'search', filter: 'expired' })}
                     className="shrink-0 px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
                     {t('attention.expired')} {attention.expired.length}
                   </button>
                 )}
                 {attention.soon.length > 0 && (
-                  <button onClick={() => nav.push({ name: 'search', q: '' })}
+                  <button onClick={() => nav.push({ name: 'search', filter: 'soon' })}
                     className="shrink-0 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
                     {t('attention.soon')} {attention.soon.length}
                   </button>
                 )}
                 {attention.lent.length > 0 && (
-                  <button onClick={() => nav.push({ name: 'search', q: '' })}
+                  <button onClick={() => nav.push({ name: 'search', filter: 'lent' })}
                     className="shrink-0 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium">
                     {t('attention.lent')} {attention.lent.length}
                   </button>
