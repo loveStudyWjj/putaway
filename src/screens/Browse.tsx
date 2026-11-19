@@ -301,7 +301,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       onTouchStart={() => startLongPress(it)}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
-      className={`relative bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm active:scale-[0.97] transition-transform text-left ${
+      className={`cv-auto relative bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm active:scale-[0.97] transition-transform text-left ${
         small ? 'w-28 min-w-28 shrink-0' : ''
       } ${selected.has(it.id) ? 'ring-2 ring-brand-500' : ''}`}>
       <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300 dark:text-gray-600">
@@ -382,7 +382,17 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         <div className="px-4 py-3">
           {cats.length > 0 && (
             <>
-              <p className="text-xs font-medium text-gray-400 mb-2 mt-1">{t('browse.categories')}</p>
+              <div className="flex items-center justify-between mb-2 mt-1">
+                <p className="text-xs font-medium text-gray-400">{t('browse.categories')}</p>
+                <select value={sort.cats} onChange={(e) => {
+                    const cats = e.target.value as 'created' | 'name';
+                    const s = { ...sort, cats }; setSort(s); saveSort(s); setCats((prev) => sortCats(prev, cats));
+                  }}
+                  className="text-[11px] bg-transparent text-gray-400 py-0.5">
+                  <option value="created">{t('sort.catsCreated')}</option>
+                  <option value="name">{t('sort.catsName')}</option>
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-2.5 mb-5">
                 {cats.map((c) => (
                   <button key={c.id}
