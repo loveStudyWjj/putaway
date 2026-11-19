@@ -7,6 +7,7 @@ import { Share } from '@capacitor/share';
 import {
   db, childrenOf, itemsIn, pathOf, deleteCategoryCascade, deleteItems, restoreDeleted,
   descendantIds, uid, setCategoryImage, removeCategoryImage, recentItems, moveItems,
+  sortItems, sortCats, loadSort, saveSort, attentionItems, type Attention, type ItemSort,
   thumbOf, expiryState,
 } from '../db';
 import { compressImage, makeThumb } from '../image';
@@ -15,6 +16,7 @@ import { qrPngDataUrl, categoryQrText } from '../qr';
 import type { Category, Item } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
 import { setHeroEl } from '../viewnav';
+import { haptic } from '../haptics';
 import {
   TopBar, IconBtn, IconPlus, IconDots, IconFolder, IconBox, IconCamera, IconQr, IconCheck,
   Sheet, SheetBtn, Confirm, Empty, BottomNav, IconEdit, IconTrash, IconMove, IconImage, IconClose, IconUser, inputCls,
@@ -31,6 +33,8 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [recent, setRecent] = useState<Item[]>([]);
+  const [attention, setAttention] = useState<Attention | null>(null);
+  const [sort, setSort] = useState(loadSort);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
   const [catImgUrls, setCatImgUrls] = useState<Record<string, string>>({});
@@ -65,10 +69,13 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       ]);
       if (!live) return;
       setPath(p);
-      setCats(c);
-      setItems(it);
-      // 根目录额外加载最近添加
-      if (!categoryId) setRecent(await recentItems(10));
+      setCats(sortCats(c, sort.cats));
+      setItems(sortItems(it, sort.items));
+      // 根目录额外加载最近添加 + 需要关注
+      if (!categoryId) {
+        setRecent(await recentItems(10));
+        setAttention(await attentionItems());
+      }
       // 每个子目录的物品数（含所有子孙目录）
       const cnt: Record<string, number> = {};
       await Promise.all(
@@ -265,6 +272,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const startLongPress = (it: Item) => {
     longPress.current = setTimeout(() => {
       if (!selecting) {
+        haptic('medium');
         setSelecting(true);
         setSelected(new Set([it.id]));
       }
@@ -413,12 +421,50 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
                   </button>
                 )}
               </div>
+              <div className="flex items-center justify-end gap-1.5 mb-2">
+                <span className="text-[11px] text-gray-400">{t('sort.title')}</span>
+                <select value={sort.items} onChange={(e) => {
+                    const items = e.target.value as ItemSort;
+                    const s = { ...sort, items }; setSort(s); saveSort(s); setItems((prev) => sortItems(prev, items));
+                  }}
+                  className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg px-2 py-1">
+                  <option value="updated">{t('sort.updated')}</option>
+                  <option value="name">{t('sort.name')}</option>
+                  <option value="quantity">{t('sort.quantity')}</option>
+                  <option value="expiry">{t('sort.expiry')}</option>
+                </select>
+              </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {items.map((it) => itemCard(it))}
               </div>
             </>
           )}
 
+          {isRoot && attention && (attention.expired.length + attention.soon.length + attention.lent.length) > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-gray-400 mb-2">{t('attention.title')}</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {attention.expired.length > 0 && (
+                  <button onClick={() => nav.push({ name: 'search', q: '' })}
+                    className="shrink-0 px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
+                    {t('attention.expired')} {attention.expired.length}
+                  </button>
+                )}
+                {attention.soon.length > 0 && (
+                  <button onClick={() => nav.push({ name: 'search', q: '' })}
+                    className="shrink-0 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                    {t('attention.soon')} {attention.soon.length}
+                  </button>
+                )}
+                {attention.lent.length > 0 && (
+                  <button onClick={() => nav.push({ name: 'search', q: '' })}
+                    className="shrink-0 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium">
+                    {t('attention.lent')} {attention.lent.length}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {isRoot && recent.length > 0 && (
             <>
               <p className="text-xs font-medium text-gray-400 mb-2 mt-5">{t('browse.recent')}</p>

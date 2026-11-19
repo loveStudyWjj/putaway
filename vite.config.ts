@@ -6,5 +6,14 @@ export default defineConfig({
   build: {
     target: 'es2020',
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'i18next', 'react-i18next'],
+          data: ['dexie', 'pinyin-pro'],
+          qr: ['qrcode', 'jsqr'],
+        },
+      },
+    },
   },
 });

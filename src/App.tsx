@@ -8,6 +8,9 @@ import { ItemDetailScreen } from './screens/ItemDetail';
 import { SearchScreen } from './screens/Search';
 import { SettingsScreen } from './screens/Settings';
 import { QrScanScreen } from './screens/QrScan';
+import { TrashScreen } from './screens/Trash';
+import { LogsScreen } from './screens/Logs';
+import { Onboarding } from './screens/Onboarding';
 
 function ScreenView({ s }: { s: Screen }) {
   switch (s.name) {
@@ -23,6 +26,10 @@ function ScreenView({ s }: { s: Screen }) {
       return <QrScanScreen />;
     case 'settings':
       return <SettingsScreen />;
+    case 'trash':
+      return <TrashScreen />;
+    case 'logs':
+      return <LogsScreen />;
   }
 }
 
@@ -74,6 +81,7 @@ export default function App() {
     <ErrorBoundary>
       <Providers>
         <Router />
+        <Onboarding />
       </Providers>
     </ErrorBoundary>
   );

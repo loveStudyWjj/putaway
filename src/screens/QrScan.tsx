@@ -4,6 +4,7 @@ import { db } from '../db';
 import { useNav, useToast } from '../store';
 import { decodeQrFromImage, decodeQrFromVideo, parseQrText } from '../qr';
 import { TopBar, IconImage } from '../ui';
+import { haptic } from '../haptics';
 
 /** 扫码定位：摄像头逐帧识别目录二维码，或从相册选图识别 */
 export function QrScanScreen() {
@@ -34,7 +35,7 @@ export function QrScanScreen() {
         const tick = () => {
           if (doneRef.current || stopped) return;
           const text = decodeQrFromVideo(v, canvasRef.current!);
-          if (text) { handleText(text); return; }
+          if (text) { haptic('success'); handleText(text); return; }
           raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);

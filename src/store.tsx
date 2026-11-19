@@ -9,6 +9,8 @@ export type Screen =
   | { name: 'item'; itemId: string }
   | { name: 'search'; q?: string }
   | { name: 'qrscan' }
+  | { name: 'trash' }
+  | { name: 'logs' }
   | { name: 'settings' };
 
 /** 栈内条目：带唯一 _k，保证每次 push 都是新组件实例（隐藏页保活、重进页全新） */

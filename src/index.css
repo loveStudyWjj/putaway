@@ -111,3 +111,7 @@ html:active-view-transition-type(backward)::view-transition-new(root) { animatio
   ::view-transition-old(*),
   ::view-transition-new(*) { animation: none !important; }
 }
+
+/* 长列表滚动性能：屏外卡片跳过渲染（intrinsic 尺寸防滚动条跳动） */
+.cv-auto { content-visibility: auto; contain-intrinsic-size: auto 170px; }
+mark { background: transparent; color: inherit; box-shadow: inset 0 -0.55em 0 rgba(14, 165, 233, .25); border-radius: 2px; }

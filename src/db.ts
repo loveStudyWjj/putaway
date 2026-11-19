@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { pinyin } from 'pinyin-pro';
 import i18n from './i18n';
-import type { Category, Item, ImageRec } from './types';
+import type { Category, Item, ImageRec, TrashEntry, LogEntry } from './types';
 
 /** 生成物品搜索串：名称+完整拼音(带空格/连写)+首字母+描述+标签+属性+借出人 */
 export function buildSearchText(it: Pick<Item, 'name' | 'description' | 'tags' | 'attributes' | 'lentTo'>): string {
@@ -26,6 +26,8 @@ class AppDB extends Dexie {
   categories!: Table<Category, string>;
   items!: Table<Item, string>;
   images!: Table<ImageRec, string>;
+  trash!: Table<TrashEntry, string>;
+  logs!: Table<LogEntry, number>;
 
   constructor() {
     super('wugui');
@@ -67,6 +69,11 @@ class AppDB extends Dexie {
             it.searchText = buildSearchText(it);
           });
       });
+    // v4：回收站 + 操作日志
+    this.version(4).stores({
+      trash: 'id, deletedAt',
+      logs: '++id, ts',
+    });
   }
 }
 
@@ -270,12 +277,14 @@ export async function saveItem(item: Item, photos: PhotoToSave[]): Promise<void>
     await db.items.put(item);
   });
   invalidateItemsCache();
+  void log('save_item', item.name);
 }
 
 /** 批量移动物品到目标目录 */
 export async function moveItems(itemIds: string[], targetCatId: string): Promise<void> {
   await db.items.where('id').anyOf(itemIds).modify({ categoryId: targetCatId, updatedAt: Date.now() });
   invalidateItemsCache();
+  void log('move_items', `${itemIds.length} items`);
 }
 
 // ---------- 删除 + 撤销快照 ----------
@@ -294,20 +303,24 @@ export async function restoreDeleted(snap: DeletedSnapshot): Promise<void> {
     if (snap.cats.length) await db.categories.bulkPut(snap.cats);
   });
   invalidateItemsCache();
+  void log('restore', `${snap.items.length} items`);
 }
 
-/** 删除物品（返回快照用于撤销） */
+/** 删除物品（返回快照用于撤销；同步进回收站） */
 export async function deleteItem(item: Item): Promise<DeletedSnapshot> {
   const images = (await db.images.bulkGet(item.imageIds)).filter((r): r is ImageRec => !!r);
   await db.transaction('rw', db.items, db.images, async () => {
     if (item.imageIds.length) await db.images.bulkDelete(item.imageIds);
     await db.items.delete(item.id);
   });
+  const snap = { cats: [] as Category[], items: [item], images };
   invalidateItemsCache();
-  return { cats: [], items: [item], images };
+  void toTrash('item', item.name, snap);
+  void log('delete_item', item.name);
+  return snap;
 }
 
-/** 批量删除物品（返回快照用于撤销） */
+/** 批量删除物品（返回快照用于撤销；同步进回收站） */
 export async function deleteItems(items: Item[]): Promise<DeletedSnapshot> {
   const imageIds = items.flatMap((i) => i.imageIds);
   const images = (await db.images.bulkGet(imageIds)).filter((r): r is ImageRec => !!r);
@@ -315,11 +328,14 @@ export async function deleteItems(items: Item[]): Promise<DeletedSnapshot> {
     if (imageIds.length) await db.images.bulkDelete(imageIds);
     await db.items.bulkDelete(items.map((i) => i.id));
   });
+  const snap = { cats: [] as Category[], items, images };
   invalidateItemsCache();
-  return { cats: [], items, images };
+  void toTrash('items', i18n.t('trash.batchName', { n: items.length }), snap);
+  void log('delete_items', `${items.length} items`);
+  return snap;
 }
 
-/** 级联删除目录（返回快照用于撤销）：子目录 + 所有物品 + 物品照片 + 目录封面图 */
+/** 级联删除目录（返回快照用于撤销；同步进回收站）：子目录 + 所有物品 + 物品照片 + 目录封面图 */
 export async function deleteCategoryCascade(categoryId: string): Promise<DeletedSnapshot> {
   const catIds = await descendantIds(categoryId);
   const [items, cats] = await Promise.all([
@@ -336,8 +352,12 @@ export async function deleteCategoryCascade(categoryId: string): Promise<Deleted
     await db.items.bulkDelete(items.map((i) => i.id));
     await db.categories.bulkDelete(catIds);
   });
+  const snap = { cats: cats.filter((c): c is Category => !!c), items, images };
   invalidateItemsCache();
-  return { cats: cats.filter((c): c is Category => !!c), items, images };
+  const root = cats.find((c) => c?.id === categoryId);
+  void toTrash('category', root?.name ?? '', snap);
+  void log('delete_cat', root?.name ?? categoryId);
+  return snap;
 }
 
 // ---------- 搜索 ----------
@@ -477,4 +497,131 @@ export async function exportCsv(): Promise<string> {
     );
   }
   return '﻿' + lines.join('\r\n'); // BOM 让 Excel 正确识别 UTF-8
+}
+
+// ---------- 回收站（30 天自动清理） ----------
+
+const TRASH_TTL = 30 * 86400000;
+
+async function toTrash(kind: TrashEntry['kind'], name: string, snap: DeletedSnapshot) {
+  try {
+    await db.trash.put({ id: uid(), kind, name, deletedAt: Date.now(), snap });
+    // 顺手清超期
+    await db.trash.where('deletedAt').below(Date.now() - TRASH_TTL).delete();
+  } catch { /* 回收站失败不阻塞删除 */ }
+}
+
+export function listTrash(): Promise<TrashEntry[]> {
+  return db.trash.orderBy('deletedAt').reverse().toArray();
+}
+
+export async function restoreTrash(id: string): Promise<void> {
+  const t = await db.trash.get(id);
+  if (!t) return;
+  await restoreDeleted(t.snap);
+  await db.trash.delete(id);
+}
+
+export function purgeTrash(id: string): Promise<void> {
+  return db.trash.delete(id);
+}
+
+export function emptyTrash(): Promise<void> {
+  return db.trash.clear();
+}
+
+// ---------- 操作日志（保留最近 200 条） ----------
+
+export async function log(action: string, text: string): Promise<void> {
+  try {
+    await db.logs.add({ ts: Date.now(), action, text });
+    const excess = await db.logs.count() - 200;
+    if (excess > 0) {
+      const oldest = await db.logs.orderBy('ts').limit(excess).primaryKeys();
+      await db.logs.bulkDelete(oldest);
+    }
+  } catch { /* 日志失败不阻塞 */ }
+}
+
+export function listLogs(limit = 100): Promise<LogEntry[]> {
+  return db.logs.orderBy('ts').reverse().limit(limit).toArray();
+}
+
+// ---------- 关注聚合（临期/已过期/借出） ----------
+
+export interface Attention {
+  expired: Item[];
+  soon: Item[];
+  lent: Item[];
+}
+
+export async function attentionItems(): Promise<Attention> {
+  const all = await allItems();
+  const expired: Item[] = [], soon: Item[] = [], lent: Item[] = [];
+  for (const it of all) {
+    const d = expiryDaysLeft(it);
+    if (d !== null && d < 0) expired.push(it);
+    else if (d !== null && d <= 30) soon.push(it);
+    if (it.lentTo) lent.push(it);
+  }
+  const byDate = (a: Item, b: Item) => (expiryDaysLeft(a) ?? 0) - (expiryDaysLeft(b) ?? 0);
+  expired.sort(byDate); soon.sort(byDate); lent.sort((a, b) => (a.lentAt ?? 0) - (b.lentAt ?? 0));
+  return { expired, soon, lent };
+}
+
+// ---------- 数量步进 ----------
+
+export async function adjustQuantity(itemId: string, delta: number): Promise<number> {
+  const it = await db.items.get(itemId);
+  if (!it) return 0;
+  const q = Math.min(9999, Math.max(1, it.quantity + delta));
+  if (q !== it.quantity) {
+    await db.items.update(itemId, { quantity: q, updatedAt: Date.now() });
+    invalidateItemsCache();
+  }
+  return q;
+}
+
+// ---------- 排序 ----------
+
+export type ItemSort = 'updated' | 'name' | 'quantity' | 'expiry';
+export type CatSort = 'created' | 'name';
+
+const SORT_KEY = 'wugui.sort';
+export function loadSort(): { items: ItemSort; cats: CatSort } {
+  try {
+    const s = JSON.parse(localStorage.getItem(SORT_KEY) || '{}');
+    return {
+      items: ['updated', 'name', 'quantity', 'expiry'].includes(s.items) ? s.items : 'updated',
+      cats: s.cats === 'name' ? 'name' : 'created',
+    };
+  } catch {
+    return { items: 'updated', cats: 'created' };
+  }
+}
+export function saveSort(s: { items: ItemSort; cats: CatSort }) {
+  localStorage.setItem(SORT_KEY, JSON.stringify(s));
+}
+
+export function sortItems(list: Item[], mode: ItemSort): Item[] {
+  const arr = [...list];
+  if (mode === 'name') arr.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  else if (mode === 'quantity') arr.sort((a, b) => b.quantity - a.quantity);
+  else if (mode === 'expiry') {
+    arr.sort((a, b) => {
+      const da = expiryDaysLeft(a), db_ = expiryDaysLeft(b);
+      if (da === null && db_ === null) return 0;
+      if (da === null) return 1;
+      if (db_ === null) return -1;
+      return da - db_;
+    });
+  } else arr.sort((a, b) => b.updatedAt - a.updatedAt);
+  return arr;
+}
+
+export function sortCats(list: Category[], mode: CatSort): Category[] {
+  const arr = [...list];
+  if (mode === 'name') arr.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  else arr.sort((a, b) => a.createdAt - b.createdAt);
+  return arr;
 }

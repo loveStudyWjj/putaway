@@ -119,4 +119,34 @@ export default {
   },
   image: { processFailed: '图片处理失败', loadFailed: '图片加载失败' },
   db: { badBackup: '备份文件格式不正确' },
+  trash: {
+    title: '回收站', empty: '回收站是空的', hint: '删除的内容保留 30 天后自动清理',
+    restore: '恢复', purge: '彻底删除', emptyAll: '清空回收站',
+    batchName: '{{n}} 件物品', kindItem: '物品', kindItems: '物品批量', kindCategory: '目录',
+    restored: '已恢复', purged: '已彻底删除', emptied: '回收站已清空',
+    purgeConfirm: '彻底删除「{{name}}」？不可恢复', emptyConfirm: '清空回收站？内容将不可恢复',
+  },
+  logs: { title: '操作记录', empty: '暂无记录' },
+  attention: { title: '需要关注', expired: '已过期', soon: '临期', lent: '借出中' },
+  item: { qtyDecrease: '减少数量', qtyIncrease: '增加数量' },
+  barcode: {
+    scanTitle: '扫商品条码', scanHint: '对准商品条码（EAN/UPC）',
+    notSupported: '当前设备不支持条码识别', lookupFail: '未查到商品信息，已填入条码号',
+    offline: '联网查询商品库失败，已填入条码号', found: '已识别商品',
+  },
+  printQr: {
+    title: '打印二维码标签', pick: '选择目录（最多 12 个）', make: '生成打印页',
+    tooMany: '最多选 12 个', done: '标签页已生成', empty: '请先选择目录',
+  },
+  shareCard: { title: '分享位置卡', done: '位置卡已生成' },
+  sort: {
+    title: '排序', updated: '最近更新', name: '名称', quantity: '数量', expiry: '到期近',
+    catsName: '目录按名称', catsCreated: '目录按创建',
+  },
+  onboard: {
+    s1t: '建目录，无限层级', s1d: '像收纳箱套收纳箱，按你的习惯组织空间',
+    s2t: '拍照，AI 自动填', s2d: '拍张照片，名称类别属性自动识别（可选联网）',
+    s3t: '随时找得到', s3d: '拼音搜索、扫码开箱、借出与到期提醒',
+    next: '下一步', done: '开始使用', skip: '跳过',
+  },
 };

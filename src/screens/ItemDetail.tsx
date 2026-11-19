@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { db, pathOf, deleteItem, restoreDeleted, getItemImages, expiryDaysLeft, buildSearchText, invalidateItemsCache } from '../db';
+import { db, pathOf, deleteItem, restoreDeleted, getItemImages, expiryDaysLeft, buildSearchText, invalidateItemsCache, adjustQuantity } from '../db';
+import { haptic } from '../haptics';
 import { cancelExpiry } from '../notify';
 import type { Item, Category } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
@@ -123,11 +124,17 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-snug">{item.name}</h2>
-          {item.quantity > 1 && (
-            <span className="shrink-0 px-2.5 py-1 rounded-full bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-500 text-sm font-medium">
+          <span className="shrink-0 flex items-center gap-1.5">
+            <button aria-label={t('item.qtyDecrease')}
+              onClick={async () => { haptic(); const q = await adjustQuantity(item.id, -1); setItem({ ...item, quantity: q }); }}
+              className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-base leading-none">−</button>
+            <span className="px-2.5 py-1 rounded-full bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-500 text-sm font-medium">
               ×{item.quantity}
             </span>
-          )}
+            <button aria-label={t('item.qtyIncrease')}
+              onClick={async () => { haptic(); const q = await adjustQuantity(item.id, 1); setItem({ ...item, quantity: q }); }}
+              className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-base leading-none">+</button>
+          </span>
         </div>
 
         <button onClick={() => nav.push({ name: 'browse', categoryId: item.categoryId })}

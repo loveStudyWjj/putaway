@@ -122,4 +122,35 @@ export default {
   },
   image: { processFailed: 'Image processing failed', loadFailed: 'Failed to load image' },
   db: { badBackup: 'Invalid backup file format' },
+  trash: {
+    title: 'Trash', empty: 'Trash is empty', hint: 'Deleted content is kept for 30 days',
+    restore: 'Restore', purge: 'Delete forever', emptyAll: 'Empty trash',
+    batchName: '{{n}} items', kindItem: 'Item', kindItems: 'Items', kindCategory: 'Folder',
+    restored: 'Restored', purged: 'Deleted forever', emptied: 'Trash emptied',
+    purgeConfirm: 'Permanently delete "{{name}}"? This cannot be undone', emptyConfirm: 'Empty the trash? Contents cannot be recovered',
+  },
+  logs: { title: 'Activity log', empty: 'No activity yet' },
+  attention: { title: 'Needs attention', expired: 'Expired', soon: 'Expiring', lent: 'Lent out' },
+  item: { qtyDecrease: 'Decrease quantity', qtyIncrease: 'Increase quantity' },
+  barcode: {
+    scanTitle: 'Scan barcode', scanHint: 'Point at a product barcode (EAN/UPC)',
+    notSupported: 'Barcode detection is not supported on this device',
+    lookupFail: 'Product not found — barcode filled in',
+    offline: 'Product lookup failed — barcode filled in', found: 'Product recognized',
+  },
+  printQr: {
+    title: 'Print QR labels', pick: 'Pick folders (up to 12)', make: 'Generate sheet',
+    tooMany: 'Up to 12 folders', done: 'Label sheet generated', empty: 'Pick at least one folder',
+  },
+  shareCard: { title: 'Share location card', done: 'Card generated' },
+  sort: {
+    title: 'Sort', updated: 'Recently updated', name: 'Name', quantity: 'Quantity', expiry: 'Expiring soon',
+    catsName: 'Folders by name', catsCreated: 'Folders by creation',
+  },
+  onboard: {
+    s1t: 'Folders, nested freely', s1d: 'Boxes inside boxes — organize spaces your way',
+    s2t: 'Snap, AI fills it in', s2d: 'One photo: name, category and attributes auto-filled (optional, online)',
+    s3t: 'Find it anytime', s3d: 'Pinyin search, scan-a-box, lending & expiry reminders',
+    next: 'Next', done: 'Get started', skip: 'Skip',
+  },
 };

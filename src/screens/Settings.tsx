@@ -229,6 +229,16 @@ export function SettingsScreen() {
             {t('settings.exportCsv')}
           </button>
           <p className="text-xs text-gray-400 mt-3 leading-relaxed">{t('settings.backupHint')}</p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => nav.push({ name: 'trash' })}
+              className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-medium active:bg-gray-200">
+              {t('trash.title')}
+            </button>
+            <button onClick={() => nav.push({ name: 'logs' })}
+              className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-medium active:bg-gray-200">
+              {t('logs.title')}
+            </button>
+          </div>
           <button onClick={() => setClearConfirm(true)}
             className="w-full mt-3 py-3 rounded-xl border border-red-100 dark:border-red-900/40 text-red-500 text-[15px] font-medium active:bg-red-50 dark:active:bg-red-500/10">
             {t('settings.clearAll')}
