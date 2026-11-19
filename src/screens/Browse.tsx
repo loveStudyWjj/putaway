@@ -291,7 +291,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
       className={`relative bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm active:scale-[0.97] transition-transform text-left ${
-        small ? 'w-28 shrink-0' : ''
+        small ? 'w-28 min-w-28 shrink-0' : ''
       } ${selected.has(it.id) ? 'ring-2 ring-brand-500' : ''}`}>
       <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300 dark:text-gray-600">
         {imgUrls[it.id]
@@ -314,9 +314,9 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
           </span>
         )}
       </div>
-      <div className="p-2">
+      <div className="p-2 min-w-0">
         <p className="text-[13px] font-medium text-gray-800 dark:text-gray-100 truncate">{it.name}</p>
-        {it.quantity > 1 && <p className="text-[11px] text-gray-400">×{it.quantity}</p>}
+        <p className="text-[11px] text-gray-400 h-4 leading-4">{it.quantity > 1 ? `×${it.quantity}` : ' '}</p>
       </div>
     </button>
   );
