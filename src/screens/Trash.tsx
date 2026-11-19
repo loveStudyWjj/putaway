@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { listTrash, restoreTrash, purgeTrash, emptyTrash, invalidateItemsCache } from '../db';
 import type { TrashEntry } from '../types';
 import { useNav } from '../store';
-import { TopBar, Empty, Confirm, IconTrash } from '../ui';
+import { TopBar, Empty, Confirm, IconTrash, IconBtn, IconRefresh } from '../ui';
+import { PullToRefresh } from '../pullrefresh';
 import { haptic } from '../haptics';
 import { rescheduleForItems } from '../notify';
 
@@ -22,7 +23,13 @@ export function TrashScreen() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
-      <TopBar title={t('trash.title')} onBack={nav.pop} />
+      <PullToRefresh onRefresh={load} />
+      <TopBar title={t('trash.title')} onBack={nav.pop}
+        right={
+          <IconBtn label={t('common.refresh')} onClick={() => void load()}>
+            <IconRefresh />
+          </IconBtn>
+        } />
       <p className="px-4 py-2 text-xs text-gray-400">{t('trash.hint')}</p>
       {rows.length === 0 ? (
         <Empty title={t('trash.empty')} />

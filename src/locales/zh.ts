@@ -6,6 +6,7 @@ export default {
     root: '根目录', camera: '拍照', gallery: '从相册选择',
     save: '保存', saving: '保存中', openFailed: '打开失败：{{msg}}',
     undo: '撤销', move: '移动', done: '完成', selected: '已选 {{count}} 项',
+    refresh: '刷新', refreshed: '已刷新',
   },
   browse: {
     newCategory: '新建目录', catOptions: '目录选项',

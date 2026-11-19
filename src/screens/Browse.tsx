@@ -15,10 +15,11 @@ import { cancelExpiry, rescheduleForItems } from '../notify';
 import { qrPngDataUrl, categoryQrText } from '../qr';
 import type { Category, Item } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
+import { PullToRefresh } from '../pullrefresh';
 import { setHeroEl } from '../viewnav';
 import { haptic } from '../haptics';
 import {
-  TopBar, IconBtn, IconPlus, IconDots, IconFolder, IconBox, IconCamera, IconQr, IconCheck,
+  TopBar, IconBtn, IconPlus, IconDots, IconFolder, IconBox, IconCamera, IconQr, IconCheck, IconRefresh,
   Sheet, SheetBtn, Confirm, Empty, BottomNav, IconEdit, IconTrash, IconMove, IconImage, IconClose, IconUser, inputCls,
 } from '../ui';
 import { CategoryPicker } from '../CategoryPicker';
@@ -371,12 +372,16 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+      <PullToRefresh onRefresh={() => { bump(); }} />
       <TopBar
         title={isRoot ? t('app.name') : current?.name ?? ''}
         sub={!isRoot ? path.map((c) => c.name).join('/') : undefined}
         onBack={isRoot ? undefined : nav.pop}
         right={
           <>
+            <IconBtn label={t('common.refresh')} onClick={bump}>
+              <IconRefresh />
+            </IconBtn>
             <IconBtn label={t('browse.scanQr')} onClick={() => nav.push({ name: 'qrscan' })}>
               <IconQr />
             </IconBtn>

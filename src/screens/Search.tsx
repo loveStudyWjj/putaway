@@ -4,7 +4,8 @@ import { db, pathTextFromMap, categoryMap, searchItems, searchCategories, thumbO
 import type { Item, Category } from '../types';
 import { useNav } from '../store';
 import { setHeroEl } from '../viewnav';
-import { TopBar, IconSearch, IconBox, IconPin, IconClose, IconFolder, Empty, BottomNav } from '../ui';
+import { TopBar, IconSearch, IconBox, IconPin, IconClose, IconFolder, Empty, BottomNav, IconBtn, IconRefresh } from '../ui';
+import { PullToRefresh } from '../pullrefresh';
 
 // 模块级记忆上次搜索词：从底部导航重新进搜索页时恢复
 let lastQuery = '';
@@ -18,6 +19,7 @@ export function SearchScreen({ initialQuery, filter }: { initialQuery?: string; 
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
   const [searched, setSearched] = useState(false);
+  const [reload, setReload] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function SearchScreen({ initialQuery, filter }: { initialQuery?: string; 
         return urls;
       });
     }, 250);
-  }, [q, filter]);
+  }, [q, filter, reload]);
 
   useEffect(() => () => {
     Object.values(imgUrls).forEach((u) => URL.revokeObjectURL(u));
@@ -66,7 +68,13 @@ export function SearchScreen({ initialQuery, filter }: { initialQuery?: string; 
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
-      <TopBar title={filter && !q ? t(`attention.${filter}`) : t('search.title')} onBack={nav.pop} />
+      <PullToRefresh onRefresh={() => setReload((x) => x + 1)} />
+      <TopBar title={filter && !q ? t(`attention.${filter}`) : t('search.title')} onBack={nav.pop}
+        right={
+          <IconBtn label={t('common.refresh')} onClick={() => setReload((x) => x + 1)}>
+            <IconRefresh />
+          </IconBtn>
+        } />
 
       <div className="p-4">
         <div className="relative">

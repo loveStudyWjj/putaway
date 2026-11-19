@@ -6,6 +6,7 @@ export default {
     root: 'Root', camera: 'Camera', gallery: 'Choose from Gallery',
     save: 'Save', saving: 'Saving…', openFailed: 'Failed to open: {{msg}}',
     undo: 'Undo', move: 'Move', done: 'Done', selected_one: '{{count}} selected', selected_other: '{{count}} selected',
+    refresh: 'Refresh', refreshed: 'Refreshed',
   },
   browse: {
     newCategory: 'New folder', catOptions: 'Folder options',

@@ -3,18 +3,26 @@ import { useTranslation } from 'react-i18next';
 import { listLogs } from '../db';
 import type { LogEntry } from '../types';
 import { useNav } from '../store';
-import { TopBar, Empty } from '../ui';
+import { TopBar, Empty, IconBtn, IconRefresh } from '../ui';
+import { PullToRefresh } from '../pullrefresh';
 
 /** 操作记录：最近 100 条写操作 */
 export function LogsScreen() {
   const { t, i18n } = useTranslation();
   const nav = useNav();
   const [rows, setRows] = useState<LogEntry[]>([]);
-  useEffect(() => { void listLogs(100).then(setRows); }, []);
+  const load = () => listLogs(100).then(setRows);
+  useEffect(() => { void load(); }, []);
   const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
-      <TopBar title={t('logs.title')} onBack={nav.pop} />
+      <PullToRefresh onRefresh={load} />
+      <TopBar title={t('logs.title')} onBack={nav.pop}
+        right={
+          <IconBtn label={t('common.refresh')} onClick={() => void load()}>
+            <IconRefresh />
+          </IconBtn>
+        } />
       {rows.length === 0 ? <Empty title={t('logs.empty')} /> : (
         <div className="px-4 space-y-1.5">
           {rows.map((r) => (

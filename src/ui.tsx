@@ -14,6 +14,7 @@ const I = (d: string | React.ReactNode) =>
   };
 
 export const IconBack = I('M15 18l-6-6 6-6');
+export const IconRefresh = I('M21 12a9 9 0 11-2.64-6.36M21 3v6h-6');
 export const IconPlus = I('M12 5v14M5 12h14');
 export const IconSearch = I('M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z');
 export const IconCamera = I(
