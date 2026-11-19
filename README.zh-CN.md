@@ -4,6 +4,14 @@
 
 离线物品收纳管理 App（安卓 APK）。目录无限层级、可设封面图；物品支持多张照片；拍照/相册上传后 AI 自动识别物品名称、建议分类、属性并预填，可修改后保存。除 AI 识别外完全离线，数据全部存在本机。
 
+## 界面截图
+
+| 首页 | 目录 | 物品详情 | 编辑物品 | 搜索 |
+| --- | --- | --- | --- | --- |
+| <img src="docs/screenshots/home-zh.png" width="200"> | <img src="docs/screenshots/folder-zh.png" width="200"> | <img src="docs/screenshots/detail-zh.png" width="200"> | <img src="docs/screenshots/form-zh.png" width="200"> | <img src="docs/screenshots/search-zh.png" width="200"> |
+
+[English screenshots](README.md#screenshots)
+
 ## 技术栈
 
 - 前端：Vite + React 18 + TypeScript + Tailwind CSS

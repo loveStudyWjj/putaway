@@ -4,6 +4,14 @@ English | [中文](README.zh-CN.md)
 
 An offline Android app for tracking where your stuff is stored. Unlimited nested folders with optional cover images; items support multiple photos. Take a photo or pick from the gallery and AI auto-fills the name, suggested category, attributes and tags — editable before saving. Fully offline except for AI recognition; all data stays on the device.
 
+## Screenshots
+
+| Home | Folder | Item Detail | Edit Item | Search |
+| --- | --- | --- | --- | --- |
+| <img src="docs/screenshots/home-en.png" width="200"> | <img src="docs/screenshots/folder-en.png" width="200"> | <img src="docs/screenshots/detail-en.png" width="200"> | <img src="docs/screenshots/form-en.png" width="200"> | <img src="docs/screenshots/search-en.png" width="200"> |
+
+[中文界面截图](README.zh-CN.md#界面截图)
+
 ## Tech Stack
 
 - Frontend: Vite + React 18 + TypeScript + Tailwind CSS
