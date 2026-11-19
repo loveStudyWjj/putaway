@@ -302,8 +302,13 @@ export interface DeletedSnapshot {
   images: ImageRec[];
 }
 
-/** 撤销删除：把快照数据整体写回 */
+/** 撤销删除：把快照数据整体写回；父引用已失效的重新挂到根目录（防孤儿） */
 export async function restoreDeleted(snap: DeletedSnapshot): Promise<void> {
+  const restoredCatIds = new Set(snap.cats.map((c) => c.id));
+  const existIds = new Set((await db.categories.toArray()).map((c) => c.id));
+  const okParent = (pid: string) => pid === '' || restoredCatIds.has(pid) || existIds.has(pid);
+  for (const c of snap.cats) if (!okParent(c.parentId)) c.parentId = '';
+  for (const it of snap.items) if (!okParent(it.categoryId)) it.categoryId = '';
   await db.transaction('rw', db.categories, db.items, db.images, async () => {
     if (snap.images.length) await db.images.bulkPut(snap.images);
     if (snap.items.length) await db.items.bulkPut(snap.items);
@@ -470,8 +475,8 @@ export async function importData(
     onProgress?.(Math.min(1, (i + CHUNK) / Math.max(1, rawImgs.length)));
     await new Promise((r) => setTimeout(r));
   }
-  await db.transaction('rw', db.categories, db.items, db.images, async () => {
-    await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear()]);
+  await db.transaction('rw', db.categories, db.items, db.images, db.trash, db.logs, async () => {
+    await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear(), db.trash.clear(), db.logs.clear()]);
     await db.categories.bulkAdd(data.categories);
     await db.items.bulkAdd(items);
     await db.images.bulkAdd(images);

@@ -84,10 +84,10 @@ function PickRow({ depth, name, disabled, onClick }: {
 }) {
   return (
     <button onClick={onClick} disabled={disabled}
-      className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-left active:bg-gray-100 ${disabled ? 'opacity-30' : ''}`}
+      className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-left active:bg-gray-100 dark:active:bg-gray-800 ${disabled ? 'opacity-30' : ''}`}
       style={{ paddingLeft: 12 + depth * 20 }}>
       <IconFolder className="w-5 h-5 text-brand-500 shrink-0" />
-      <span className="text-[15px] text-gray-800 truncate">{name}</span>
+      <span className="text-[15px] text-gray-800 dark:text-gray-100 truncate">{name}</span>
     </button>
   );
 }

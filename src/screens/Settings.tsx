@@ -15,7 +15,7 @@ import {
 } from '../ui';
 import { makeLabelSheet } from '../labelsheet';
 import { shareBlobFile } from '../sharefile';
-import { categoryMap, pathTextFromMap } from '../db';
+import { categoryMap, pathTextFromMap, invalidateItemsCache } from '../db';
 import type { Category } from '../types';
 
 export function SettingsScreen() {
@@ -279,6 +279,7 @@ export function SettingsScreen() {
         onOk={async () => {
           await cancelAllExpiries();
           await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear(), db.trash.clear(), db.logs.clear()]);
+          invalidateItemsCache();
           bump();
           toast(t('settings.cleared'));
           setClearConfirm(false);
