@@ -19,6 +19,14 @@ export interface Item {
   tags: string[];
   /** 关联 images 表的照片列表 */
   imageIds: string[];
+  /** 借给谁（未借出为空） */
+  lentTo?: string;
+  /** 借出时间戳 */
+  lentAt?: number;
+  /** 到期/保质期日期 'YYYY-MM-DD'（过期提醒 + 本地通知） */
+  expiryDate?: string;
+  /** 预生成的小写搜索串（名称+拼音+描述+标签+属性+借出人），保存时写入 */
+  searchText?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -26,6 +34,8 @@ export interface Item {
 export interface ImageRec {
   id: string;
   blob: Blob;
+  /** 列表缩略图（~256px JPEG），详情页仍用 blob 原图 */
+  thumb?: Blob;
 }
 
 export interface AiResult {

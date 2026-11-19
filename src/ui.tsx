@@ -56,23 +56,45 @@ export const IconHome = I('M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2zM9 22V12h
 export const IconSparkle = I('M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9zM19 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z');
 export const IconMove = I('M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20');
 export const IconPin = I('M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1118 0zM15 10a3 3 0 11-6 0 3 3 0 016 0z');
+export const IconQr = I(
+  <>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <path d="M14 14h3v3h-3zM21 14v1M14 21h1M18 18h3v3h-3z" />
+  </>
+);
+export const IconCheck = I('M20 6L9 17l-5-5');
+export const IconUser = I(
+  <>
+    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </>
+);
+export const IconClock = I(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 6v6l4 2" />
+  </>
+);
+export const IconTag = I('M20.59 13.41L11 3H4v7l9.59 9.59a2 2 0 002.83 0l4.16-4.16a2 2 0 000-2.83zM7 7h.01');
 
 // ---------- 顶栏 ----------
 export function TopBar({ title, onBack, right, sub }: {
   title: string; sub?: string; onBack?: () => void; right?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-100 pt-[env(safe-area-inset-top)]">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800 pt-[env(safe-area-inset-top)]">
       <div className="flex items-center h-14 px-2 gap-1">
         {onBack ? (
-          <button onClick={onBack} className="p-2 -ml-1 rounded-full active:bg-gray-100 text-gray-700">
+          <button onClick={onBack} className="p-2 -ml-1 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-gray-700 dark:text-gray-200">
             <IconBack />
           </button>
         ) : (
           <div className="w-10" />
         )}
         <div className="flex-1 min-w-0">
-          <h1 className="text-base font-semibold text-gray-900 truncate">{title}</h1>
+          <h1 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">{title}</h1>
           {sub && <p className="text-xs text-gray-400 truncate -mt-0.5">{sub}</p>}
         </div>
         <div className="flex items-center gap-0.5">{right}</div>
@@ -86,7 +108,7 @@ export function IconBtn({ onClick, children, label }: {
 }) {
   return (
     <button onClick={onClick} aria-label={label}
-      className="p-2 rounded-full active:bg-gray-100 text-gray-600">
+      className="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-gray-600 dark:text-gray-300">
       {children}
     </button>
   );
@@ -100,9 +122,9 @@ export function Sheet({ open, onClose, title, children }: {
   return (
     <div className="fixed inset-0 z-50" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
-      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-[slideUp_.2s_ease-out]"
+      <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-[slideUp_.2s_ease-out]"
         onClick={(e) => e.stopPropagation()}>
-        {title && <p className="text-sm font-medium text-gray-500 mb-2 px-1">{title}</p>}
+        {title && <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 px-1">{title}</p>}
         {children}
       </div>
     </div>
@@ -114,7 +136,7 @@ export function SheetBtn({ onClick, icon, label, sub, danger }: {
 }) {
   return (
     <button onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-xl active:bg-gray-100 text-left ${danger ? 'text-red-600' : 'text-gray-800'}`}>
+      className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-xl active:bg-gray-100 dark:active:bg-gray-800 text-left ${danger ? 'text-red-600' : 'text-gray-800 dark:text-gray-200'}`}>
       {icon && <span className={danger ? 'text-red-500' : 'text-gray-400'}>{icon}</span>}
       <span className="flex-1">
         <span className="block text-[15px]">{label}</span>
@@ -134,11 +156,11 @@ export function Confirm({ open, title, desc, okText, danger, onOk, onCancel }: {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-8" onClick={onCancel}>
       <div className="absolute inset-0 bg-black/40" />
-      <div className="relative bg-white rounded-2xl p-5 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-        {desc && <p className="text-sm text-gray-500 mt-2 leading-relaxed">{desc}</p>}
+      <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-5 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+        {desc && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">{desc}</p>}
         <div className="flex gap-2 mt-5">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-[15px] font-medium active:bg-gray-200">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[15px] font-medium active:bg-gray-200 dark:active:bg-gray-700">
             {t('common.cancel')}
           </button>
           <button onClick={onOk}
@@ -155,9 +177,9 @@ export function Confirm({ open, title, desc, okText, danger, onOk, onCancel }: {
 export function Empty({ icon, title, desc }: { icon?: React.ReactNode; title: string; desc?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
-      <div className="text-gray-200 mb-3">{icon ?? <IconBox className="w-16 h-16" />}</div>
-      <p className="text-gray-500 font-medium">{title}</p>
-      {desc && <p className="text-gray-400 text-sm mt-1.5 leading-relaxed">{desc}</p>}
+      <div className="text-gray-200 dark:text-gray-700 mb-3">{icon ?? <IconBox className="w-16 h-16" />}</div>
+      <p className="text-gray-500 dark:text-gray-400 font-medium">{title}</p>
+      {desc && <p className="text-gray-400 dark:text-gray-500 text-sm mt-1.5 leading-relaxed">{desc}</p>}
     </div>
   );
 }
@@ -185,7 +207,7 @@ export function BottomNav({ active, onHome, onSearch, onSettings }: {
     </button>
   );
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 flex pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex pb-[env(safe-area-inset-bottom)]">
       <Btn on={active === 'home'} onClick={onHome} icon={<IconHome className="w-6 h-6" />} label={t('nav.home')} />
       <Btn on={active === 'search'} onClick={onSearch} icon={<IconSearch className="w-6 h-6" />} label={t('nav.search')} />
       <Btn on={active === 'settings'} onClick={onSettings} icon={<IconSettings className="w-6 h-6" />} label={t('nav.settings')} />
@@ -197,11 +219,11 @@ export function BottomNav({ active, onHome, onSearch, onSettings }: {
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block mb-4">
-      <span className="block text-[13px] font-medium text-gray-500 mb-1.5">{label}</span>
+      <span className="block text-[13px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">{label}</span>
       {children}
     </label>
   );
 }
 
 export const inputCls =
-  'w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-[15px] text-gray-900 outline-none focus:border-brand-500 focus:bg-white placeholder:text-gray-300';
+  'w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-[15px] text-gray-900 dark:text-gray-100 outline-none focus:border-brand-500 focus:bg-white dark:focus:bg-gray-800 placeholder:text-gray-300 dark:placeholder:text-gray-600';

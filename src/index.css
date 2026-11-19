@@ -13,6 +13,10 @@ body {
   user-select: none;
   -webkit-user-select: none;
 }
+html.dark body {
+  background: #030712;
+  color-scheme: dark;
+}
 
 input, textarea {
   user-select: text;

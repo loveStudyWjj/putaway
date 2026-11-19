@@ -4,6 +4,8 @@
 
 离线物品收纳管理 App（安卓 APK）。目录无限层级、可设封面图；物品支持多张照片；拍照/相册上传后 AI 自动识别物品名称、建议分类、属性并预填，可修改后保存。除 AI 识别外完全离线，数据全部存在本机。
 
+**亮点**：目录二维码标签（打印贴箱、扫码直达）· 拼音+目录名搜索 · 批量移动/删除可撤销 · 借出追踪 · 到期日本地提醒 · 深色模式 · CSV 清单导出 · 同时可作为 PWA 在浏览器运行。
+
 ## 界面截图
 
 | 首页 | 目录 | 物品详情 | 编辑物品 | 搜索 |
@@ -22,15 +24,18 @@
 
 ```
 src/
-  db.ts            Dexie 数据层（目录树/物品/级联删除/搜索/备份导入导出）
+  db.ts            Dexie 数据层（目录树/物品/可撤销删除/拼音搜索/备份/CSV）
   ai.ts            OpenAI 兼容接口识别（图片 → 结构化 JSON）
-  image.ts         客户端图片压缩（最长边 1024，JPEG）
+  image.ts         客户端图片压缩（1024px 原图 + 256px 缩略图）
+  qr.ts            目录二维码生成 + jsQR 识别
+  notify.ts        到期本地提醒（@capacitor/local-notifications）
+  theme.ts         浅色/深色/跟随系统
   i18n.ts          i18next 初始化（中/英）
   locales/         zh.ts、en.ts 文案字典
-  store.tsx        导航栈 / Toast / 数据版本
+  store.tsx        导航栈（保活、限深）/ 带撤销按钮的 Toast
   ui.tsx           图标、顶栏、底部面板、弹窗、底部导航等
   CategoryPicker.tsx  目录树选择弹层
-  screens/         Browse 浏览、ItemForm 表单、ItemDetail 详情、Search 搜索、Settings 设置
+  screens/         Browse 浏览、ItemForm 表单、ItemDetail 详情、Search 搜索、QrScan 扫码、Settings 设置
 scripts/make-icons.mjs  纯 Node 生成应用图标
 android/           Capacitor Android 工程
 ```
@@ -55,6 +60,18 @@ build-apk.bat
 
 或手动分步：`npm run build` → `npx cap sync android` → `cd android && gradlew assembleDebug`。
 
+单元测试（数据层，fake-indexeddb）：`npm test`
+
+### Release 签名
+
+正式发布需生成签名密钥，把 `keystore.properties`（gitignore）放入 `android/` 目录，`build.gradle` 会自动启用：
+
+```bash
+keytool -genkey -v -keystore android/wugui.keystore -alias wugui -keyalg RSA -keysize 2048 -validity 10000
+cp android/keystore.properties.example android/keystore.properties  # 填写密码
+cd android && gradlew assembleRelease
+```
+
 ## 多语言
 
 内置中文 / English（react-i18next），默认跟随系统语言，可在「设置」页手动切换并持久化。AI 识别的输出语言与界面语言一致；Android 启动器名称随系统语言显示「物归处 / WuGui」。
@@ -66,11 +83,12 @@ build-apk.bat
 ## 使用
 
 1. 把 APK 传到手机安装（debug 签名，系统提示"未知来源"属正常）。
-2. 首页右上角「目录+」建目录，层级不限；目录菜单（右上角 ⋯）可重命名/移动/删除，也可设置封面图（在父级列表中显示）。
+2. 首页右上角「目录+」建目录，层级不限；目录菜单（右上角 ⋯）可重命名/移动/删除、设封面图，还能生成**二维码标签**——打印贴在箱子上，用顶栏扫码直达该目录。
 3. 右下角 ＋ → 拍照识别 / 相册 / 手动填写；编辑/新建物品可添加多张照片，逐张删除。
 4. 识别后自动填名称/描述/属性/标签，并给出建议分类（点击应用会自动建目录）；新建时首张图自动识别，编辑模式点按钮手动识别且不覆盖已填字段。
-5. 点物品进详情：大图横滑浏览全部照片（带页码），可编辑、移动位置、删除；顶部搜索跨目录匹配名称/属性/标签。
-6. 设置页可导出/导入 JSON 备份（含照片 base64），换机前先导出。
+5. 点物品进详情：大图横滑、点标签直接搜索；可标记借出给谁、设到期日（当天上午本地提醒）。删除数秒内可撤销。
+6. 搜索匹配名称（含**拼音**）、描述、属性、标签和目录名；长按或点「批量管理」可多选移动/删除。
+7. 设置页可导出/导入 JSON 备份（含照片）、导出 CSV 清单，切换语言和外观。
 
 ## 开源许可
 

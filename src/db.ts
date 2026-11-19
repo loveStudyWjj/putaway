@@ -1,6 +1,26 @@
 import Dexie, { type Table } from 'dexie';
+import { pinyin } from 'pinyin-pro';
 import i18n from './i18n';
 import type { Category, Item, ImageRec } from './types';
+
+/** 生成物品搜索串：名称+完整拼音(带空格/连写)+首字母+描述+标签+属性+借出人 */
+export function buildSearchText(it: Pick<Item, 'name' | 'description' | 'tags' | 'attributes' | 'lentTo'>): string {
+  const name = it.name ?? '';
+  let pyFull = '', pyJoin = '', pyFirst = '';
+  try {
+    pyFull = pinyin(name, { toneType: 'none' });        // "er ji"
+    pyJoin = pyFull.replace(/\s+/g, '');                // "erji"
+    pyFirst = pinyin(name, { pattern: 'first', toneType: 'none' }).replace(/\s+/g, ''); // "ej"
+  } catch { /* 非中文字符忽略 */ }
+  return [
+    name, pyFull, pyJoin, pyFirst,
+    it.description ?? '',
+    ...(it.tags ?? []),
+    ...Object.keys(it.attributes ?? {}),
+    ...Object.values(it.attributes ?? {}),
+    it.lentTo ?? '',
+  ].join(' ').toLowerCase();
+}
 
 class AppDB extends Dexie {
   categories!: Table<Category, string>;
@@ -32,12 +52,38 @@ class AppDB extends Dexie {
             delete it.imageId;
           });
       });
+    // v3：name 索引 + 回填 searchText（含拼音）
+    this.version(3)
+      .stores({
+        categories: 'id, parentId',
+        items: 'id, categoryId, updatedAt, name',
+        images: 'id',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('items')
+          .toCollection()
+          .modify((it: Item) => {
+            it.searchText = buildSearchText(it);
+          });
+      });
   }
 }
 
 export const db = new AppDB();
 
 export const uid = () => crypto.randomUUID();
+
+// ---------- 物品全表缓存（搜索用；写路径负责失效） ----------
+
+let itemsCache: Item[] | null = null;
+export function invalidateItemsCache() {
+  itemsCache = null;
+}
+async function allItems(): Promise<Item[]> {
+  if (!itemsCache) itemsCache = await db.items.toArray();
+  return itemsCache;
+}
 
 // ---------- 目录 ----------
 
@@ -49,6 +95,27 @@ export async function childrenOf(parentId: string): Promise<Category[]> {
 export async function itemsIn(categoryId: string): Promise<Item[]> {
   const list = await db.items.where('categoryId').equals(categoryId).toArray();
   return list.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** 全量目录表 → Map（目录通常很少，一次加载在内存里拼路径，避免逐层查询） */
+export async function categoryMap(): Promise<Map<string, Category>> {
+  const all = await db.categories.toArray();
+  return new Map(all.map((c) => [c.id, c]));
+}
+
+/** 用目录 Map 在内存中拼 "a/b/c" 路径 */
+export function pathTextFromMap(map: Map<string, Category>, categoryId: string): string {
+  const names: string[] = [];
+  let cur = categoryId;
+  const guard = new Set<string>();
+  while (cur && !guard.has(cur)) {
+    guard.add(cur);
+    const c = map.get(cur);
+    if (!c) break;
+    names.unshift(c.name);
+    cur = c.parentId;
+  }
+  return names.join('/') || i18n.t('common.root');
 }
 
 /** 从当前目录向上的面包屑链（含自身，根在前） */
@@ -95,31 +162,29 @@ export async function isDescendant(categoryId: string, ancestorId: string): Prom
   return false;
 }
 
-/** 级联删除目录：子目录 + 所有物品 + 物品照片 + 目录封面图 */
-export async function deleteCategoryCascade(categoryId: string): Promise<void> {
-  const catIds = await descendantIds(categoryId);
-  const [items, cats] = await Promise.all([
-    db.items.where('categoryId').anyOf(catIds).toArray(),
-    db.categories.bulkGet(catIds),
-  ]);
-  const imageIds = [
-    ...items.flatMap((i) => i.imageIds),
-    ...cats.filter((c): c is Category => !!c && !!c.imageId).map((c) => c.imageId!),
-  ];
-  await db.transaction('rw', db.categories, db.items, db.images, async () => {
-    await db.images.bulkDelete(imageIds);
-    await db.items.bulkDelete(items.map((i) => i.id));
-    await db.categories.bulkDelete(catIds);
+/** 目录名（含拼音）搜索 */
+export async function searchCategories(q: string): Promise<Category[]> {
+  const kw = q.trim().toLowerCase();
+  if (!kw) return [];
+  const all = await db.categories.toArray();
+  return all.filter((c) => {
+    if (c.name.toLowerCase().includes(kw)) return true;
+    try {
+      return pinyin(c.name, { toneType: 'none' }).replace(/\s+/g, '').includes(kw)
+        || pinyin(c.name, { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '').includes(kw);
+    } catch {
+      return false;
+    }
   });
 }
 
 /** 设置目录封面图（自动替换旧图） */
-export async function setCategoryImage(categoryId: string, blob: Blob): Promise<void> {
+export async function setCategoryImage(categoryId: string, blob: Blob, thumb?: Blob): Promise<void> {
   const cat = await db.categories.get(categoryId);
   if (!cat) return;
   const nid = uid();
   await db.transaction('rw', db.categories, db.images, async () => {
-    await db.images.put({ id: nid, blob });
+    await db.images.put({ id: nid, blob, thumb });
     if (cat.imageId) await db.images.delete(cat.imageId);
     await db.categories.update(categoryId, { imageId: nid });
   });
@@ -154,24 +219,38 @@ export async function ensureCategoryPath(path: string): Promise<string> {
 
 // ---------- 物品 ----------
 
-/** 按 imageIds 顺序取所有照片 */
+/** 按 imageIds 顺序取所有照片（原图） */
 export async function getItemImages(item: Item): Promise<Blob[]> {
   const recs = await db.images.bulkGet(item.imageIds);
   return recs.filter((r): r is ImageRec => !!r).map((r) => r.blob);
+}
+
+/** 列表缩略图：有 thumb 用 thumb，否则回退原图（老数据） */
+export function thumbOf(rec?: ImageRec): Blob | undefined {
+  return rec ? rec.thumb ?? rec.blob : undefined;
+}
+
+/** 最近更新的物品 */
+export function recentItems(limit = 10): Promise<Item[]> {
+  return db.items.orderBy('updatedAt').reverse().limit(limit).toArray();
 }
 
 export interface PhotoToSave {
   /** 已有图片的 imageId；新图片为 undefined */
   id?: string;
   blob?: Blob;
+  /** 新图对应的缩略图 */
+  thumb?: Blob;
 }
 
 /**
  * 保存物品及其照片列表：
  * - photos 中带 id 的保留，blob 的新建
  * - item.imageIds 中原有、photos 中不存在的图片会被删除
+ * - 同时重算 searchText（拼音搜索索引）
  */
 export async function saveItem(item: Item, photos: PhotoToSave[]): Promise<void> {
+  item.searchText = buildSearchText(item);
   await db.transaction('rw', db.items, db.images, async () => {
     const keepIds = new Set(photos.filter((p) => p.id).map((p) => p.id));
     const removed = (item.imageIds ?? []).filter((id) => !keepIds.has(id));
@@ -182,7 +261,7 @@ export async function saveItem(item: Item, photos: PhotoToSave[]): Promise<void>
         ids.push(p.id);
       } else if (p.blob) {
         const nid = uid();
-        await db.images.put({ id: nid, blob: p.blob });
+        await db.images.put({ id: nid, blob: p.blob, thumb: p.thumb });
         ids.push(nid);
       }
     }
@@ -190,42 +269,115 @@ export async function saveItem(item: Item, photos: PhotoToSave[]): Promise<void>
     item.updatedAt = Date.now();
     await db.items.put(item);
   });
+  invalidateItemsCache();
 }
 
-export async function deleteItem(item: Item): Promise<void> {
+/** 批量移动物品到目标目录 */
+export async function moveItems(itemIds: string[], targetCatId: string): Promise<void> {
+  await db.items.where('id').anyOf(itemIds).modify({ categoryId: targetCatId, updatedAt: Date.now() });
+  invalidateItemsCache();
+}
+
+// ---------- 删除 + 撤销快照 ----------
+
+export interface DeletedSnapshot {
+  cats: Category[];
+  items: Item[];
+  images: ImageRec[];
+}
+
+/** 撤销删除：把快照数据整体写回 */
+export async function restoreDeleted(snap: DeletedSnapshot): Promise<void> {
+  await db.transaction('rw', db.categories, db.items, db.images, async () => {
+    if (snap.images.length) await db.images.bulkPut(snap.images);
+    if (snap.items.length) await db.items.bulkPut(snap.items);
+    if (snap.cats.length) await db.categories.bulkPut(snap.cats);
+  });
+  invalidateItemsCache();
+}
+
+/** 删除物品（返回快照用于撤销） */
+export async function deleteItem(item: Item): Promise<DeletedSnapshot> {
+  const images = (await db.images.bulkGet(item.imageIds)).filter((r): r is ImageRec => !!r);
   await db.transaction('rw', db.items, db.images, async () => {
     if (item.imageIds.length) await db.images.bulkDelete(item.imageIds);
     await db.items.delete(item.id);
   });
+  invalidateItemsCache();
+  return { cats: [], items: [item], images };
 }
+
+/** 批量删除物品（返回快照用于撤销） */
+export async function deleteItems(items: Item[]): Promise<DeletedSnapshot> {
+  const imageIds = items.flatMap((i) => i.imageIds);
+  const images = (await db.images.bulkGet(imageIds)).filter((r): r is ImageRec => !!r);
+  await db.transaction('rw', db.items, db.images, async () => {
+    if (imageIds.length) await db.images.bulkDelete(imageIds);
+    await db.items.bulkDelete(items.map((i) => i.id));
+  });
+  invalidateItemsCache();
+  return { cats: [], items, images };
+}
+
+/** 级联删除目录（返回快照用于撤销）：子目录 + 所有物品 + 物品照片 + 目录封面图 */
+export async function deleteCategoryCascade(categoryId: string): Promise<DeletedSnapshot> {
+  const catIds = await descendantIds(categoryId);
+  const [items, cats] = await Promise.all([
+    db.items.where('categoryId').anyOf(catIds).toArray(),
+    db.categories.bulkGet(catIds),
+  ]);
+  const imageIds = [
+    ...items.flatMap((i) => i.imageIds),
+    ...cats.filter((c): c is Category => !!c && !!c.imageId).map((c) => c.imageId!),
+  ];
+  const images = (await db.images.bulkGet(imageIds)).filter((r): r is ImageRec => !!r);
+  await db.transaction('rw', db.categories, db.items, db.images, async () => {
+    await db.images.bulkDelete(imageIds);
+    await db.items.bulkDelete(items.map((i) => i.id));
+    await db.categories.bulkDelete(catIds);
+  });
+  invalidateItemsCache();
+  return { cats: cats.filter((c): c is Category => !!c), items, images };
+}
+
+// ---------- 搜索 ----------
 
 export async function searchItems(q: string): Promise<Item[]> {
   const kw = q.trim().toLowerCase();
   if (!kw) return [];
-  const all = await db.items.toArray();
+  const all = await allItems();
   return all.filter((it) => {
-    const hay = [
-      it.name,
-      it.description,
-      ...it.tags,
-      ...Object.keys(it.attributes),
-      ...Object.values(it.attributes),
-    ]
-      .join(' ')
-      .toLowerCase();
+    const hay = it.searchText ?? buildSearchText(it);
     return hay.includes(kw);
   });
 }
 
+// ---------- 到期 ----------
+
+/** 距到期日天数（负数=已过期）；无到期日返回 null */
+export function expiryDaysLeft(it: Item, now = Date.now()): number | null {
+  if (!it.expiryDate) return null;
+  const t = new Date(it.expiryDate + 'T23:59:59').getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.ceil((t - now) / 86400000);
+}
+
+/** 到期状态：expired 已过期 / soon 30天内 / null */
+export function expiryState(it: Item): 'expired' | 'soon' | null {
+  const d = expiryDaysLeft(it);
+  if (d === null || d > 30) return null;
+  return d < 0 ? 'expired' : 'soon';
+}
+
 // ---------- 备份 ----------
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve((r.result as string).split(',')[1] ?? '');
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < buf.length; i += 0x8000) {
+    s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
 }
 
 function base64ToBlob(b64: string, type: string): Blob {
@@ -235,19 +387,36 @@ function base64ToBlob(b64: string, type: string): Blob {
   return new Blob([arr], { type });
 }
 
-export async function exportData(): Promise<string> {
+/** 导出 JSON 备份；图片分批转 base64，onProgress 报告 0~1 进度 */
+export async function exportData(onProgress?: (p: number) => void): Promise<string> {
   const [categories, items, images] = await Promise.all([
     db.categories.toArray(),
     db.items.toArray(),
     db.images.toArray(),
   ]);
-  const imgs = await Promise.all(
-    images.map(async (r) => ({ id: r.id, type: r.blob.type, base64: await blobToBase64(r.blob) }))
-  );
-  return JSON.stringify({ version: 1, exportedAt: Date.now(), categories, items, images: imgs });
+  const imgs: any[] = [];
+  const CHUNK = 12;
+  for (let i = 0; i < images.length; i += CHUNK) {
+    const batch = await Promise.all(
+      images.slice(i, i + CHUNK).map(async (r) => ({
+        id: r.id,
+        type: r.blob.type,
+        base64: await blobToBase64(r.blob),
+        thumbType: r.thumb?.type,
+        thumbBase64: r.thumb ? await blobToBase64(r.thumb) : undefined,
+      }))
+    );
+    imgs.push(...batch);
+    onProgress?.(Math.min(1, (i + CHUNK) / Math.max(1, images.length)));
+    await new Promise((r) => setTimeout(r)); // 让出主线程，避免大图库卡 UI
+  }
+  return JSON.stringify({ version: 2, exportedAt: Date.now(), categories, items, images: imgs });
 }
 
-export async function importData(json: string): Promise<{ cats: number; items: number }> {
+export async function importData(
+  json: string,
+  onProgress?: (p: number) => void
+): Promise<{ cats: number; items: number }> {
   const data = JSON.parse(json);
   if (!Array.isArray(data.categories) || !Array.isArray(data.items)) {
     throw new Error(i18n.t('db.badBackup'));
@@ -257,16 +426,55 @@ export async function importData(json: string): Promise<{ cats: number; items: n
     ...it,
     imageIds: Array.isArray(it.imageIds) ? it.imageIds : it.imageId ? [it.imageId] : [],
     imageId: undefined,
+    searchText: it.searchText ?? buildSearchText(it),
   }));
-  const images: ImageRec[] = (data.images ?? []).map((r: any) => ({
-    id: r.id,
-    blob: base64ToBlob(r.base64, r.type || 'image/jpeg'),
-  }));
+  const images: ImageRec[] = [];
+  const rawImgs: any[] = data.images ?? [];
+  const CHUNK = 20;
+  for (let i = 0; i < rawImgs.length; i += CHUNK) {
+    images.push(
+      ...rawImgs.slice(i, i + CHUNK).map((r: any) => ({
+        id: r.id,
+        blob: base64ToBlob(r.base64, r.type || 'image/jpeg'),
+        thumb: r.thumbBase64 ? base64ToBlob(r.thumbBase64, r.thumbType || 'image/jpeg') : undefined,
+      }))
+    );
+    onProgress?.(Math.min(1, (i + CHUNK) / Math.max(1, rawImgs.length)));
+    await new Promise((r) => setTimeout(r));
+  }
   await db.transaction('rw', db.categories, db.items, db.images, async () => {
     await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear()]);
     await db.categories.bulkAdd(data.categories);
     await db.items.bulkAdd(items);
     await db.images.bulkAdd(images);
   });
+  invalidateItemsCache();
   return { cats: data.categories.length, items: data.items.length };
+}
+
+/** 导出 CSV（仅物品清单，不含图片） */
+export async function exportCsv(): Promise<string> {
+  const [items, map] = await Promise.all([db.items.toArray(), categoryMap()]);
+  const esc = (s: string) => `"${(s ?? '').replace(/"/g, '""')}"`;
+  const attrKeys = Array.from(new Set(items.flatMap((i) => Object.keys(i.attributes))));
+  const head = ['name', 'path', 'quantity', 'description', 'tags', 'lentTo', 'expiryDate', 'updatedAt', ...attrKeys];
+  const lines = [head.map(esc).join(',')];
+  for (const it of items) {
+    lines.push(
+      [
+        it.name,
+        pathTextFromMap(map, it.categoryId),
+        String(it.quantity),
+        it.description,
+        it.tags.join(' '),
+        it.lentTo ?? '',
+        it.expiryDate ?? '',
+        new Date(it.updatedAt).toISOString(),
+        ...attrKeys.map((k) => it.attributes[k] ?? ''),
+      ]
+        .map(esc)
+        .join(',')
+    );
+  }
+  return '﻿' + lines.join('\r\n'); // BOM 让 Excel 正确识别 UTF-8
 }

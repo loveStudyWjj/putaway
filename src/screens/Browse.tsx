@@ -1,17 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import {
-  db, childrenOf, itemsIn, pathOf, deleteCategoryCascade, descendantIds, uid,
-  setCategoryImage, removeCategoryImage,
+  db, childrenOf, itemsIn, pathOf, deleteCategoryCascade, deleteItems, restoreDeleted,
+  descendantIds, uid, setCategoryImage, removeCategoryImage, recentItems, moveItems,
+  thumbOf, expiryState,
 } from '../db';
-import { compressImage } from '../image';
+import { compressImage, makeThumb } from '../image';
+import { cancelExpiry } from '../notify';
+import { qrPngDataUrl, categoryQrText } from '../qr';
 import type { Category, Item } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
 import {
-  TopBar, IconBtn, IconPlus, IconDots, IconFolder, IconBox, IconCamera,
-  Sheet, SheetBtn, Confirm, Empty, BottomNav, IconEdit, IconTrash, IconMove, IconImage, inputCls,
+  TopBar, IconBtn, IconPlus, IconDots, IconFolder, IconBox, IconCamera, IconQr, IconCheck,
+  Sheet, SheetBtn, Confirm, Empty, BottomNav, IconEdit, IconTrash, IconMove, IconImage, IconClose, IconUser, inputCls,
 } from '../ui';
 import { CategoryPicker } from '../CategoryPicker';
 
@@ -19,11 +24,12 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const nav = useNav();
   const { toast } = useToast();
   const { v, bump } = useDataVersion();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const [path, setPath] = useState<Category[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [recent, setRecent] = useState<Item[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
   const [catImgUrls, setCatImgUrls] = useState<Record<string, string>>({});
@@ -34,9 +40,19 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [delConfirm, setDelConfirm] = useState(false);
   const [loading, setLoading] = useState(true);
+  // 批量选择
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchMoveOpen, setBatchMoveOpen] = useState(false);
+  const [batchDelConfirm, setBatchDelConfirm] = useState(false);
+  // 二维码标签
+  const [qrSheet, setQrSheet] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
+  const longPress = useRef<ReturnType<typeof setTimeout>>();
 
   const isRoot = !categoryId;
   const current = path[path.length - 1];
+  const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US';
 
   useEffect(() => {
     let live = true;
@@ -50,6 +66,8 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       setPath(p);
       setCats(c);
       setItems(it);
+      // 根目录额外加载最近添加
+      if (!categoryId) setRecent(await recentItems(10));
       // 每个子目录的物品数（含所有子孙目录）
       const cnt: Record<string, number> = {};
       await Promise.all(
@@ -60,15 +78,16 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       );
       if (!live) return;
       setCounts(cnt);
-      // 物品缩略图（取第一张照片）
+      // 物品缩略图（优先 thumb 小图）
       const urls: Record<string, string> = {};
-      const firstIds = it.map((i) => i.imageIds[0]).filter(Boolean);
+      const allShown = [...it, ...(categoryId ? [] : await recentItems(10))];
+      const firstIds = Array.from(new Set(allShown.map((i) => i.imageIds[0]).filter(Boolean)));
       const recs = await db.images.bulkGet(firstIds);
-      it.forEach((item) => {
+      allShown.forEach((item) => {
         const fid = item.imageIds[0];
-        if (fid) {
-          const rec = recs.find((r) => r?.id === fid);
-          if (rec) urls[item.id] = URL.createObjectURL(rec.blob);
+        if (fid && !urls[item.id]) {
+          const blob = thumbOf(recs.find((r) => r?.id === fid));
+          if (blob) urls[item.id] = URL.createObjectURL(blob);
         }
       });
       setImgUrls((old) => {
@@ -80,8 +99,8 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       const catImgs = await db.images.bulkGet(c.map((x) => x.imageId).filter(Boolean) as string[]);
       c.forEach((cat) => {
         if (cat.imageId) {
-          const rec = catImgs.find((r) => r?.id === cat.imageId);
-          if (rec) curl[cat.id] = URL.createObjectURL(rec.blob);
+          const blob = thumbOf(catImgs.find((r) => r?.id === cat.imageId));
+          if (blob) curl[cat.id] = URL.createObjectURL(blob);
         }
       });
       setCatImgUrls((old) => {
@@ -124,10 +143,14 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   };
 
   const removeCategory = async () => {
-    await deleteCategoryCascade(categoryId);
+    const snap = await deleteCategoryCascade(categoryId);
+    snap.items.forEach((i) => cancelExpiry(i.id));
     bump();
-    toast(t('browse.deleted'));
     nav.pop();
+    toast(t('browse.deleted'), {
+      label: t('common.undo'),
+      onClick: async () => { await restoreDeleted(snap); bump(); },
+    });
   };
 
   const pickPhoto = async (source: 'camera' | 'photos') => {
@@ -159,8 +182,9 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       const bin = atob(photo.base64String);
       const arr = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      const blob = await compressImage(new Blob([arr], { type: `image/${photo.format || 'jpeg'}` }), 512);
-      await setCategoryImage(categoryId, blob);
+      const raw = new Blob([arr], { type: `image/${photo.format || 'jpeg'}` });
+      const [blob, thumb] = await Promise.all([compressImage(raw, 512), makeThumb(raw, 256)]);
+      await setCategoryImage(categoryId, blob, thumb);
       bump();
       toast(t('browse.coverSet'));
     } catch (e: any) {
@@ -174,14 +198,140 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     toast(t('browse.coverRemoved'));
   };
 
+  const showQr = async () => {
+    setQrUrl(await qrPngDataUrl(categoryQrText(categoryId)));
+    setQrSheet(true);
+  };
+
+  const shareQr = async () => {
+    const name = `${current?.name ?? 'wugui'}-qr.png`;
+    const b64 = qrUrl.split(',')[1];
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const res = await Filesystem.writeFile({ path: name, data: b64, directory: Directory.Cache });
+        await Share.share({ title: name, url: res.uri });
+      } catch { /* 用户取消分享 */ }
+    } else {
+      const a = document.createElement('a');
+      a.href = qrUrl;
+      a.download = name;
+      a.click();
+    }
+  };
+
+  // ---- 批量选择 ----
+  const toggleSelect = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const exitSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+
+  const batchMove = async (target: string) => {
+    setBatchMoveOpen(false);
+    await moveItems(Array.from(selected), target);
+    const n = selected.size;
+    exitSelect();
+    bump();
+    toast(t('browse.batchDone', { count: n }));
+  };
+
+  const batchDelete = async () => {
+    const toDel = items.filter((i) => selected.has(i.id));
+    const snap = await deleteItems(toDel);
+    toDel.forEach((i) => cancelExpiry(i.id));
+    exitSelect();
+    setBatchDelConfirm(false);
+    bump();
+    toast(t('browse.deletedN', { count: snap.items.length }), {
+      label: t('common.undo'),
+      onClick: async () => { await restoreDeleted(snap); bump(); },
+    });
+  };
+
+  const onItemPress = (it: Item) => {
+    if (selecting) { toggleSelect(it.id); return; }
+    nav.push({ name: 'item', itemId: it.id });
+  };
+
+  const startLongPress = (it: Item) => {
+    longPress.current = setTimeout(() => {
+      if (!selecting) {
+        setSelecting(true);
+        setSelected(new Set([it.id]));
+      }
+    }, 450);
+  };
+  const cancelLongPress = () => clearTimeout(longPress.current);
+
+  const expiryBadge = (it: Item) => {
+    const s = expiryState(it);
+    if (!s) return null;
+    return (
+      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+        s === 'expired' ? 'bg-red-500 text-white' : 'bg-amber-400 text-amber-950'
+      }`}>
+        {s === 'expired' ? t('browse.expired') : t('browse.expirySoon')}
+      </span>
+    );
+  };
+
+  const itemCard = (it: Item, small = false) => (
+    <button key={it.id}
+      onClick={() => onItemPress(it)}
+      onMouseDown={() => startLongPress(it)}
+      onMouseUp={cancelLongPress}
+      onMouseLeave={cancelLongPress}
+      onTouchStart={() => startLongPress(it)}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+      className={`relative bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm active:scale-[0.97] transition-transform text-left ${
+        small ? 'w-28 shrink-0' : ''
+      } ${selected.has(it.id) ? 'ring-2 ring-brand-500' : ''}`}>
+      <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300 dark:text-gray-600">
+        {imgUrls[it.id]
+          ? <img src={imgUrls[it.id]} className="w-full h-full object-cover" />
+          : <IconBox className="w-8 h-8" />}
+        {/* 借出角标 */}
+        {it.lentTo && (
+          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-medium flex items-center gap-0.5">
+            <IconUser className="w-2.5 h-2.5" />{t('browse.lentBadge')}
+          </span>
+        )}
+        {/* 到期角标 */}
+        <span className="absolute top-1.5 right-1.5">{expiryBadge(it)}</span>
+        {/* 选择态 */}
+        {selecting && (
+          <span className={`absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+            selected.has(it.id) ? 'bg-brand-600 border-brand-600 text-white' : 'border-white bg-black/20'
+          }`}>
+            {selected.has(it.id) && <IconCheck className="w-3 h-3" />}
+          </span>
+        )}
+      </div>
+      <div className="p-2">
+        <p className="text-[13px] font-medium text-gray-800 dark:text-gray-100 truncate">{it.name}</p>
+        {it.quantity > 1 && <p className="text-[11px] text-gray-400">×{it.quantity}</p>}
+      </div>
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-[calc(7rem+env(safe-area-inset-bottom))]">
       <TopBar
         title={isRoot ? t('app.name') : current?.name ?? ''}
         sub={!isRoot ? path.map((c) => c.name).join('/') : undefined}
         onBack={isRoot ? undefined : nav.pop}
         right={
           <>
+            <IconBtn label={t('browse.scanQr')} onClick={() => nav.push({ name: 'qrscan' })}>
+              <IconQr />
+            </IconBtn>
             <IconBtn label={t('browse.newCategory')} onClick={() => setNewCatOpen(true)}>
               <div className="relative">
                 <IconFolder />
@@ -204,7 +354,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
           {path.map((c, i) => (
             <span key={c.id} className="flex items-center gap-1">
               <span>/</span>
-              <span className={i === path.length - 1 ? 'text-gray-600 font-medium' : ''}>{c.name}</span>
+              <span className={i === path.length - 1 ? 'text-gray-600 dark:text-gray-300 font-medium' : ''}>{c.name}</span>
             </span>
           ))}
         </div>
@@ -212,7 +362,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 
       {loading ? (
         <Empty title={t('common.loading')} />
-      ) : cats.length === 0 && items.length === 0 ? (
+      ) : cats.length === 0 && items.length === 0 && recent.length === 0 ? (
         <Empty
           title={isRoot ? t('browse.emptyRootTitle') : t('browse.emptyTitle')}
           desc={isRoot ? t('browse.emptyRootDesc') : t('browse.emptyDesc')}
@@ -226,14 +376,14 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
                 {cats.map((c) => (
                   <button key={c.id}
                     onClick={() => nav.push({ name: 'browse', categoryId: c.id })}
-                    className="flex items-center gap-3 bg-white rounded-2xl p-3.5 shadow-sm active:scale-[0.98] transition-transform text-left">
-                    <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0 overflow-hidden">
+                    className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-2xl p-3.5 shadow-sm active:scale-[0.98] transition-transform text-left">
+                    <div className="w-11 h-11 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 flex items-center justify-center shrink-0 overflow-hidden">
                       {catImgUrls[c.id]
                         ? <img src={catImgUrls[c.id]} className="w-full h-full object-cover" />
                         : <IconFolder />}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[15px] font-medium text-gray-800 truncate">{c.name}</p>
+                      <p className="text-[15px] font-medium text-gray-800 dark:text-gray-100 truncate">{c.name}</p>
                       <p className="text-xs text-gray-400">{t('browse.itemCount', { count: counts[c.id] ?? 0 })}</p>
                     </div>
                   </button>
@@ -244,34 +394,67 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 
           {items.length > 0 && (
             <>
-              <p className="text-xs font-medium text-gray-400 mb-2 mt-1">{t('browse.items')}</p>
-              <div className="grid grid-cols-3 gap-2.5">
-                {items.map((it) => (
-                  <button key={it.id}
-                    onClick={() => nav.push({ name: 'item', itemId: it.id })}
-                    className="bg-white rounded-2xl overflow-hidden shadow-sm active:scale-[0.97] transition-transform text-left">
-                    <div className="aspect-square bg-gray-100 flex items-center justify-center text-gray-300">
-                      {imgUrls[it.id]
-                        ? <img src={imgUrls[it.id]} className="w-full h-full object-cover" />
-                        : <IconBox className="w-8 h-8" />}
-                    </div>
-                    <div className="p-2">
-                      <p className="text-[13px] font-medium text-gray-800 truncate">{it.name}</p>
-                      {it.quantity > 1 && <p className="text-[11px] text-gray-400">×{it.quantity}</p>}
-                    </div>
+              <div className="flex items-center justify-between mb-2 mt-1">
+                <p className="text-xs font-medium text-gray-400">{t('browse.items')}</p>
+                {!selecting && (
+                  <button onClick={() => setSelecting(true)}
+                    className="text-xs text-brand-600 font-medium active:opacity-60">
+                    {t('browse.batch')}
                   </button>
-                ))}
+                )}
+                {selecting && (
+                  <button
+                    onClick={() => setSelected(new Set(items.map((i) => i.id)))}
+                    className="text-xs text-brand-600 font-medium active:opacity-60">
+                    {t('browse.selectAll')}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {items.map((it) => itemCard(it))}
+              </div>
+            </>
+          )}
+
+          {isRoot && recent.length > 0 && (
+            <>
+              <p className="text-xs font-medium text-gray-400 mb-2 mt-5">{t('browse.recent')}</p>
+              <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1">
+                {recent.map((it) => itemCard(it, true))}
               </div>
             </>
           )}
         </div>
       )}
 
-      {/* 添加物品 FAB */}
-      <button onClick={() => setAddSheet(true)}
-        className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-brand-600 text-white shadow-lg shadow-brand-600/30 flex items-center justify-center active:scale-95 transition-transform">
-        <IconPlus className="w-7 h-7" />
-      </button>
+      {/* 添加物品 FAB（选择态隐藏） */}
+      {!selecting && (
+        <button onClick={() => setAddSheet(true)}
+          className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-brand-600 text-white shadow-lg shadow-brand-600/30 flex items-center justify-center active:scale-95 transition-transform">
+          <IconPlus className="w-7 h-7" />
+        </button>
+      )}
+
+      {/* 批量操作栏 */}
+      {selecting && (
+        <div className="fixed left-0 right-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 px-4">
+          <div className="bg-gray-900 dark:bg-gray-800 text-white rounded-2xl shadow-xl flex items-center px-4 py-3 gap-2">
+            <span className="text-sm text-gray-300">{t('common.selected', { count: selected.size })}</span>
+            <div className="flex-1" />
+            <button onClick={() => setBatchMoveOpen(true)} disabled={!selected.size}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 text-sm disabled:opacity-40">
+              <IconMove className="w-4 h-4" />{t('common.move')}
+            </button>
+            <button onClick={() => setBatchDelConfirm(true)} disabled={!selected.size}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/80 text-sm disabled:opacity-40">
+              <IconTrash className="w-4 h-4" />{t('common.delete')}
+            </button>
+            <button onClick={exitSelect} className="p-1.5 rounded-lg bg-white/10">
+              <IconClose className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <BottomNav active="home"
         onHome={() => nav.reset()}
@@ -297,9 +480,21 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
           <SheetBtn icon={<IconTrash />} label={t('browse.removeCover')}
             onClick={() => { setMenu(false); clearCover(); }} />
         )}
+        <SheetBtn icon={<IconQr />} label={t('browse.qrLabel')} sub={t('browse.qrLabelDesc')}
+          onClick={() => { setMenu(false); showQr(); }} />
         <MoveCategoryRow id={categoryId} onDone={() => { setMenu(false); bump(); toast(t('browse.moved')); }} />
         <SheetBtn danger icon={<IconTrash />} label={t('browse.deleteCat')} sub={t('browse.deleteCatSub')}
           onClick={() => { setMenu(false); setDelConfirm(true); }} />
+      </Sheet>
+
+      {/* 二维码标签 */}
+      <Sheet open={qrSheet} onClose={() => setQrSheet(false)} title={t('browse.qrLabel')}>
+        {qrUrl && <img src={qrUrl} className="w-48 h-48 mx-auto rounded-xl" />}
+        <p className="text-xs text-gray-400 text-center mt-2 mb-3">{t('browse.qrLabelDesc')}</p>
+        <button onClick={shareQr}
+          className="w-full py-3 rounded-xl bg-brand-600 text-white text-[15px] font-medium active:bg-brand-700">
+          {t('browse.shareQr')}
+        </button>
       </Sheet>
 
       {/* 封面图来源 */}
@@ -307,6 +502,12 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         <SheetBtn icon={<IconCamera />} label={t('common.camera')} onClick={() => { setCoverSheet(false); pickCover('camera'); }} />
         <SheetBtn icon={<IconImage />} label={t('common.gallery')} onClick={() => { setCoverSheet(false); pickCover('photos'); }} />
       </Sheet>
+
+      <CategoryPicker open={batchMoveOpen} onClose={() => setBatchMoveOpen(false)}
+        title={t('picker.moveTo')} onPick={batchMove} />
+      <Confirm open={batchDelConfirm} danger title={t('browse.deleteCatTitle')}
+        desc={t('browse.deletedN', { count: selected.size })} okText={t('common.delete')}
+        onCancel={() => setBatchDelConfirm(false)} onOk={batchDelete} />
 
       <NameDialog open={newCatOpen} title={t('browse.newCategory')} placeholder={t('browse.newCatPlaceholder')}
         onCancel={() => setNewCatOpen(false)}
@@ -358,14 +559,14 @@ export function NameDialog({ open, title, placeholder, initial, onOk, onCancel }
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-8" onClick={onCancel}>
       <div className="absolute inset-0 bg-black/40" />
-      <div className="relative bg-white rounded-2xl p-5 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold text-gray-900 mb-3">{title}</h3>
+      <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-5 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">{title}</h3>
         <input autoFocus value={val} onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && val.trim() && onOk(val)}
           placeholder={placeholder} className={inputCls} />
         <div className="flex gap-2 mt-4">
           <button onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-[15px] font-medium">{t('common.cancel')}</button>
+            className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[15px] font-medium">{t('common.cancel')}</button>
           <button onClick={() => val.trim() && onOk(val)} disabled={!val.trim()}
             className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-[15px] font-medium disabled:opacity-40">{t('common.ok')}</button>
         </div>

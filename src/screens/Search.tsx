@@ -1,18 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { db, pathText, searchItems } from '../db';
-import type { Item } from '../types';
+import { db, pathTextFromMap, categoryMap, searchItems, searchCategories, thumbOf } from '../db';
+import type { Item, Category } from '../types';
 import { useNav } from '../store';
-import { TopBar, IconSearch, IconBox, IconPin, IconClose, Empty, BottomNav } from '../ui';
+import { TopBar, IconSearch, IconBox, IconPin, IconClose, IconFolder, Empty, BottomNav } from '../ui';
 
-// 模块级记忆上次搜索词：进详情页返回后恢复搜索状态
+// 模块级记忆上次搜索词：从底部导航重新进搜索页时恢复
 let lastQuery = '';
 
-export function SearchScreen() {
+export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const nav = useNav();
   const { t } = useTranslation();
-  const [q, setQ] = useState(lastQuery);
+  const [q, setQ] = useState(initialQuery ?? lastQuery);
   const [results, setResults] = useState<Item[]>([]);
+  const [catResults, setCatResults] = useState<Category[]>([]);
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
   const [searched, setSearched] = useState(false);
@@ -23,18 +24,22 @@ export function SearchScreen() {
     timer.current = setTimeout(async () => {
       lastQuery = q;
       const kw = q.trim();
-      if (!kw) { setResults([]); setSearched(false); return; }
-      const list = await searchItems(kw);
+      if (!kw) { setResults([]); setCatResults([]); setSearched(false); return; }
+      const [list, cats, map] = await Promise.all([searchItems(kw), searchCategories(kw), categoryMap()]);
       setResults(list);
+      setCatResults(cats);
       setSearched(true);
+      // 目录 Map 已在手，内存里拼路径——避免逐条逐层查库
       const p: Record<string, string> = {};
-      await Promise.all(list.map(async (it) => { p[it.id] = await pathText(it.categoryId); }));
+      for (const it of list) p[it.id] = pathTextFromMap(map, it.categoryId);
+      for (const c of cats) p[c.id] = pathTextFromMap(map, c.parentId);
       setPaths(p);
       const recs = await db.images.bulkGet(list.map((i) => i.imageIds[0]).filter(Boolean));
       const urls: Record<string, string> = {};
       for (const it of list) {
         const rec = recs.find((r) => r?.id === it.imageIds[0]);
-        if (it.imageIds[0] && rec) urls[it.id] = URL.createObjectURL(rec.blob);
+        const blob = thumbOf(rec);
+        if (it.imageIds[0] && blob) urls[it.id] = URL.createObjectURL(blob);
       }
       setImgUrls((old) => {
         Object.values(old).forEach((u) => URL.revokeObjectURL(u));
@@ -47,8 +52,10 @@ export function SearchScreen() {
     Object.values(imgUrls).forEach((u) => URL.revokeObjectURL(u));
   }, [imgUrls]);
 
+  const empty = searched && results.length === 0 && catResults.length === 0;
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <TopBar title={t('search.title')} onBack={nav.pop} />
 
       <div className="p-4">
@@ -57,11 +64,11 @@ export function SearchScreen() {
           <input
             autoFocus value={q} onChange={(e) => setQ(e.target.value)}
             placeholder={t('search.placeholder')}
-            className="w-full bg-white border border-gray-200 rounded-2xl pl-11 pr-10 py-3 text-[15px] outline-none focus:border-brand-500 placeholder:text-gray-300"
+            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl pl-11 pr-10 py-3 text-[15px] text-gray-900 dark:text-gray-100 outline-none focus:border-brand-500 placeholder:text-gray-300 dark:placeholder:text-gray-600"
           />
           {q && (
             <button onClick={() => setQ('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center active:bg-gray-200">
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-400 flex items-center justify-center active:bg-gray-200">
               <IconClose className="w-3.5 h-3.5" />
             </button>
           )}
@@ -72,33 +79,63 @@ export function SearchScreen() {
         {!searched ? (
           <Empty icon={<IconSearch className="w-16 h-16" />} title={t('search.hint')}
             desc={t('search.hintDesc')} />
-        ) : results.length === 0 ? (
+        ) : empty ? (
           <Empty title={t('search.noResult', { q })} />
         ) : (
-          <div className="space-y-2">
-            {results.map((it) => (
-              <button key={it.id} onClick={() => nav.push({ name: 'item', itemId: it.id })}
-                className="w-full flex items-center gap-3 bg-white rounded-2xl p-3 shadow-sm active:scale-[0.99] transition-transform text-left">
-                <div className="w-14 h-14 rounded-xl bg-gray-100 overflow-hidden flex items-center justify-center text-gray-300 shrink-0">
-                  {imgUrls[it.id]
-                    ? <img src={imgUrls[it.id]} className="w-full h-full object-cover" />
-                    : <IconBox className="w-6 h-6" />}
+          <>
+            {catResults.length > 0 && (
+              <>
+                <p className="text-xs font-medium text-gray-400 mb-2">{t('search.folders')}</p>
+                <div className="space-y-2 mb-4">
+                  {catResults.map((c) => (
+                    <button key={c.id} onClick={() => nav.push({ name: 'browse', categoryId: c.id })}
+                      className="w-full flex items-center gap-3 bg-white dark:bg-gray-900 rounded-2xl p-3 shadow-sm active:scale-[0.99] transition-transform text-left">
+                      <div className="w-14 h-14 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 flex items-center justify-center shrink-0">
+                        <IconFolder className="w-6 h-6" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-medium text-gray-800 dark:text-gray-100 truncate">{c.name}</p>
+                        <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-0.5">
+                          <IconPin className="w-3 h-3 shrink-0" /> {paths[c.id] ?? t('common.root')}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-medium text-gray-800 truncate">
-                    {it.name}
-                    {it.quantity > 1 && <span className="text-gray-400 text-sm"> ×{it.quantity}</span>}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-0.5">
-                    <IconPin className="w-3 h-3 shrink-0" /> {paths[it.id] ?? t('common.root')}
-                  </p>
-                  {it.description && (
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{it.description}</p>
-                  )}
+              </>
+            )}
+
+            {results.length > 0 && (
+              <>
+                <p className="text-xs font-medium text-gray-400 mb-2">{t('search.items')}</p>
+                <div className="space-y-2">
+                  {results.map((it) => (
+                    <button key={it.id} onClick={() => nav.push({ name: 'item', itemId: it.id })}
+                      className="w-full flex items-center gap-3 bg-white dark:bg-gray-900 rounded-2xl p-3 shadow-sm active:scale-[0.99] transition-transform text-left">
+                      <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center text-gray-300 dark:text-gray-600 shrink-0">
+                        {imgUrls[it.id]
+                          ? <img src={imgUrls[it.id]} className="w-full h-full object-cover" />
+                          : <IconBox className="w-6 h-6" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-medium text-gray-800 dark:text-gray-100 truncate">
+                          {it.name}
+                          {it.quantity > 1 && <span className="text-gray-400 text-sm"> ×{it.quantity}</span>}
+                          {it.lentTo && <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-normal">{t('browse.lentBadge')} · {it.lentTo}</span>}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-0.5">
+                          <IconPin className="w-3 h-3 shrink-0" /> {paths[it.id] ?? t('common.root')}
+                        </p>
+                        {it.description && (
+                          <p className="text-xs text-gray-400 truncate mt-0.5">{it.description}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
-            ))}
-          </div>
+              </>
+            )}
+          </>
         )}
       </div>
 

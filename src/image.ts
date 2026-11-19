@@ -24,6 +24,11 @@ export async function compressImage(input: Blob, maxDim = 1024, quality = 0.82):
   }
 }
 
+/** 生成列表用缩略图：默认 256px 最长边 JPEG，体积小、列表解码快 */
+export function makeThumb(input: Blob, maxDim = 256): Promise<Blob> {
+  return compressImage(input, maxDim, 0.8);
+}
+
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
