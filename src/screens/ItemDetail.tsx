@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db, pathOf, deleteItem, getItemImages } from '../db';
 import type { Item, Category } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
@@ -12,6 +13,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
   const nav = useNav();
   const { toast } = useToast();
   const { v, bump } = useDataVersion();
+  const { t, i18n } = useTranslation();
   const [item, setItem] = useState<Item | null>(null);
   const [path, setPath] = useState<Category[]>([]);
   const [imgUrls, setImgUrls] = useState<string[]>([]);
@@ -24,7 +26,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
   useEffect(() => {
     (async () => {
       const it = await db.items.get(itemId);
-      if (!it) { toast('物品不存在'); nav.pop(); return; }
+      if (!it) { toast(t('detail.itemNotFound')); nav.pop(); return; }
       setItem(it);
       setPath(await pathOf(it.categoryId));
       const blobs = await getItemImages(it);
@@ -53,7 +55,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
   return (
     <div className="min-h-screen bg-white pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <TopBar title={item.name} onBack={nav.pop}
-        right={<IconBtn label="更多" onClick={() => setMenu(true)}><IconDots /></IconBtn>} />
+        right={<IconBtn label={t('detail.more')} onClick={() => setMenu(true)}><IconDots /></IconBtn>} />
 
       {imgUrls.length > 0 ? (
         <div className="relative">
@@ -96,7 +98,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
 
         <button onClick={() => nav.push({ name: 'browse', categoryId: item.categoryId })}
           className="mt-2 inline-flex items-center gap-1 text-sm text-brand-600 active:opacity-60">
-          <IconPin className="w-4 h-4" /> {pathTextJoin(path) || '根目录'}
+          <IconPin className="w-4 h-4" /> {pathTextJoin(path) || t('common.root')}
         </button>
 
         {item.description && (
@@ -105,7 +107,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
 
         {attrs.length > 0 && (
           <div className="mt-5">
-            <p className="text-[13px] font-medium text-gray-400 mb-2">属性</p>
+            <p className="text-[13px] font-medium text-gray-400 mb-2">{t('detail.attributes')}</p>
             <div className="rounded-2xl border border-gray-100 overflow-hidden">
               {attrs.map(([k, val], i) => (
                 <div key={k} className={`flex px-4 py-3 ${i % 2 ? 'bg-white' : 'bg-gray-50/60'}`}>
@@ -128,42 +130,42 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
         )}
 
         <p className="mt-6 text-xs text-gray-300">
-          更新于 {new Date(item.updatedAt).toLocaleString('zh-CN')}
+          {t('detail.updatedAt', { time: new Date(item.updatedAt).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US') })}
         </p>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex gap-2.5">
         <button onClick={() => setMoveOpen(true)}
           className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gray-100 text-gray-700 text-[15px] font-medium active:bg-gray-200">
-          <IconMove className="w-5 h-5" /> 移动
+          <IconMove className="w-5 h-5" /> {t('detail.move')}
         </button>
         <button onClick={() => nav.push({ name: 'itemForm', itemId: item.id })}
           className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-brand-600 text-white text-[15px] font-medium active:bg-brand-700">
-          <IconEdit className="w-5 h-5" /> 编辑
+          <IconEdit className="w-5 h-5" /> {t('detail.edit')}
         </button>
       </div>
 
       <Sheet open={menu} onClose={() => setMenu(false)}>
-        <SheetBtn danger icon={<IconTrash />} label="删除物品"
+        <SheetBtn danger icon={<IconTrash />} label={t('detail.deleteItem')}
           onClick={() => { setMenu(false); setDelConfirm(true); }} />
       </Sheet>
 
-      <CategoryPicker open={moveOpen} onClose={() => setMoveOpen(false)} title="移动到"
+      <CategoryPicker open={moveOpen} onClose={() => setMoveOpen(false)} title={t('picker.moveTo')}
         onPick={async (id) => {
           if (id === item.categoryId) { setMoveOpen(false); return; }
           await db.items.update(item.id, { categoryId: id, updatedAt: Date.now() });
           setMoveOpen(false);
           bump();
-          toast('已移动');
+          toast(t('detail.moved'));
         }} />
 
-      <Confirm open={delConfirm} danger title="删除这个物品？"
-        desc={`「${item.name}」将被永久删除。`} okText="删除"
+      <Confirm open={delConfirm} danger title={t('detail.deleteTitle')}
+        desc={t('detail.deleteDesc', { name: item.name })} okText={t('common.delete')}
         onCancel={() => setDelConfirm(false)}
         onOk={async () => {
           await deleteItem(item);
           bump();
-          toast('已删除');
+          toast(t('detail.deleted'));
           nav.pop();
         }} />
     </div>

@@ -43,6 +43,10 @@ build-apk.bat
 
 或手动分步：`npm run build` → `npx cap sync android` → `cd android && gradlew assembleDebug`。
 
+## 多语言
+
+内置中文 / English（react-i18next），默认跟随系统语言，可在「设置」页手动切换并持久化。AI 识别的输出语言与界面语言一致；Android 启动器名称随系统语言显示「物归处 / WuGui」。
+
 ## AI 配置
 
 源码与构建产物中**不含任何接口地址、密钥或模型默认值**——首次使用在 App 内「设置」页填写 Base URL / API Key / 模型（OpenAI 兼容协议，需支持图片输入的视觉模型），保存在本机 localStorage，仅识别时联网。

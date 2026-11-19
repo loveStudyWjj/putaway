@@ -1,3 +1,5 @@
+import i18n from './i18n';
+
 /** 图片压缩：最长边缩到 maxDim，输出 JPEG Blob */
 export async function compressImage(input: Blob, maxDim = 1024, quality = 0.82): Promise<Blob> {
   const url = URL.createObjectURL(input);
@@ -12,7 +14,7 @@ export async function compressImage(input: Blob, maxDim = 1024, quality = 0.82):
     canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
     return await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error('图片处理失败'))),
+        (b) => (b ? resolve(b) : reject(new Error(i18n.t('image.processFailed')))),
         'image/jpeg',
         quality
       )
@@ -26,7 +28,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('图片加载失败'));
+    img.onerror = () => reject(new Error(i18n.t('image.loadFailed')));
     img.src = url;
   });
 }

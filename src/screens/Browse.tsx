@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -18,6 +19,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const nav = useNav();
   const { toast } = useToast();
   const { v, bump } = useDataVersion();
+  const { t } = useTranslation();
 
   const [path, setPath] = useState<Category[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
@@ -110,7 +112,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     if (!n) return;
     await db.categories.add({ id: uid(), name: n, parentId: categoryId, createdAt: Date.now() });
     bump();
-    toast(`已创建「${n}」`);
+    toast(t('browse.created', { name: n }));
   };
 
   const renameCategory = async (name: string) => {
@@ -118,13 +120,13 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     if (!n || !current) return;
     await db.categories.update(current.id, { name: n });
     bump();
-    toast('已重命名');
+    toast(t('browse.renamed'));
   };
 
   const removeCategory = async () => {
     await deleteCategoryCascade(categoryId);
     bump();
-    toast('已删除');
+    toast(t('browse.deleted'));
     nav.pop();
   };
 
@@ -142,7 +144,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         nav.push({ name: 'itemForm', categoryId });
       }
     } catch (e: any) {
-      if (e?.message && !/cancel/i.test(e.message)) toast(`打开失败：${e.message}`);
+      if (e?.message && !/cancel/i.test(e.message)) toast(t('common.openFailed', { msg: e.message }));
     }
   };
 
@@ -160,34 +162,34 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       const blob = await compressImage(new Blob([arr], { type: `image/${photo.format || 'jpeg'}` }), 512);
       await setCategoryImage(categoryId, blob);
       bump();
-      toast('已设置封面');
+      toast(t('browse.coverSet'));
     } catch (e: any) {
-      if (e?.message && !/cancel/i.test(e.message)) toast(`打开失败：${e.message}`);
+      if (e?.message && !/cancel/i.test(e.message)) toast(t('common.openFailed', { msg: e.message }));
     }
   };
 
   const clearCover = async () => {
     await removeCategoryImage(categoryId);
     bump();
-    toast('已移除封面');
+    toast(t('browse.coverRemoved'));
   };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-[calc(7rem+env(safe-area-inset-bottom))]">
       <TopBar
-        title={isRoot ? '物归处' : current?.name ?? ''}
+        title={isRoot ? t('app.name') : current?.name ?? ''}
         sub={!isRoot ? path.map((c) => c.name).join('/') : undefined}
         onBack={isRoot ? undefined : nav.pop}
         right={
           <>
-            <IconBtn label="新建目录" onClick={() => setNewCatOpen(true)}>
+            <IconBtn label={t('browse.newCategory')} onClick={() => setNewCatOpen(true)}>
               <div className="relative">
                 <IconFolder />
                 <IconPlus className="w-3 h-3 absolute -right-0.5 -bottom-0.5 text-brand-600" />
               </div>
             </IconBtn>
             {!isRoot && (
-              <IconBtn label="目录选项" onClick={() => setMenu(true)}>
+              <IconBtn label={t('browse.catOptions')} onClick={() => setMenu(true)}>
                 <IconDots />
               </IconBtn>
             )}
@@ -198,7 +200,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       {/* 面包屑 */}
       {path.length > 1 && (
         <div className="px-4 pt-3 flex items-center gap-1 text-xs text-gray-400 overflow-x-auto whitespace-nowrap">
-          <button className="active:text-brand-600" onClick={() => nav.reset()}>首页</button>
+          <button className="active:text-brand-600" onClick={() => nav.reset()}>{t('nav.home')}</button>
           {path.map((c, i) => (
             <span key={c.id} className="flex items-center gap-1">
               <span>/</span>
@@ -209,17 +211,17 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       )}
 
       {loading ? (
-        <Empty title="加载中…" />
+        <Empty title={t('common.loading')} />
       ) : cats.length === 0 && items.length === 0 ? (
         <Empty
-          title={isRoot ? '开始整理你的物品吧' : '这里是空的'}
-          desc={isRoot ? '先创建一个目录，比如「卧室」「书房」，再把物品放进去' : '点击下方按钮添加物品或子目录'}
+          title={isRoot ? t('browse.emptyRootTitle') : t('browse.emptyTitle')}
+          desc={isRoot ? t('browse.emptyRootDesc') : t('browse.emptyDesc')}
         />
       ) : (
         <div className="px-4 py-3">
           {cats.length > 0 && (
             <>
-              <p className="text-xs font-medium text-gray-400 mb-2 mt-1">目录</p>
+              <p className="text-xs font-medium text-gray-400 mb-2 mt-1">{t('browse.categories')}</p>
               <div className="grid grid-cols-2 gap-2.5 mb-5">
                 {cats.map((c) => (
                   <button key={c.id}
@@ -232,7 +234,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
                     </div>
                     <div className="min-w-0">
                       <p className="text-[15px] font-medium text-gray-800 truncate">{c.name}</p>
-                      <p className="text-xs text-gray-400">{counts[c.id] ?? 0} 件物品</p>
+                      <p className="text-xs text-gray-400">{t('browse.itemCount', { count: counts[c.id] ?? 0 })}</p>
                     </div>
                   </button>
                 ))}
@@ -242,7 +244,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 
           {items.length > 0 && (
             <>
-              <p className="text-xs font-medium text-gray-400 mb-2 mt-1">物品</p>
+              <p className="text-xs font-medium text-gray-400 mb-2 mt-1">{t('browse.items')}</p>
               <div className="grid grid-cols-3 gap-2.5">
                 {items.map((it) => (
                   <button key={it.id}
@@ -277,44 +279,44 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         onSettings={() => nav.push({ name: 'settings' })} />
 
       {/* 添加方式 */}
-      <Sheet open={addSheet} onClose={() => setAddSheet(false)} title="添加物品">
-        <SheetBtn icon={<IconCamera />} label="拍照识别" sub="拍照后 AI 自动填写物品信息"
+      <Sheet open={addSheet} onClose={() => setAddSheet(false)} title={t('browse.addItem')}>
+        <SheetBtn icon={<IconCamera />} label={t('browse.cameraAI')} sub={t('browse.cameraAIDesc')}
           onClick={() => { setAddSheet(false); pickPhoto('camera'); }} />
-        <SheetBtn icon={<IconImage />} label="从相册选择" sub="上传图片让 AI 识别"
+        <SheetBtn icon={<IconImage />} label={t('browse.pickGallery')} sub={t('browse.pickGalleryDesc')}
           onClick={() => { setAddSheet(false); pickPhoto('photos'); }} />
-        <SheetBtn icon={<IconEdit />} label="手动填写"
+        <SheetBtn icon={<IconEdit />} label={t('browse.manual')}
           onClick={() => { setAddSheet(false); nav.push({ name: 'itemForm', categoryId }); }} />
       </Sheet>
 
       {/* 当前目录操作 */}
       <Sheet open={menu} onClose={() => setMenu(false)} title={current?.name}>
-        <SheetBtn icon={<IconEdit />} label="重命名目录" onClick={() => { setMenu(false); setRenaming(true); }} />
-        <SheetBtn icon={<IconImage />} label="设置封面图" sub="在父级目录中显示"
+        <SheetBtn icon={<IconEdit />} label={t('browse.rename')} onClick={() => { setMenu(false); setRenaming(true); }} />
+        <SheetBtn icon={<IconImage />} label={t('browse.setCover')} sub={t('browse.setCoverDesc')}
           onClick={() => { setMenu(false); setCoverSheet(true); }} />
         {current?.imageId && (
-          <SheetBtn icon={<IconTrash />} label="移除封面图"
+          <SheetBtn icon={<IconTrash />} label={t('browse.removeCover')}
             onClick={() => { setMenu(false); clearCover(); }} />
         )}
-        <MoveCategoryRow id={categoryId} onDone={() => { setMenu(false); bump(); toast('已移动'); }} />
-        <SheetBtn danger icon={<IconTrash />} label="删除目录" sub="子目录和物品将一并删除"
+        <MoveCategoryRow id={categoryId} onDone={() => { setMenu(false); bump(); toast(t('browse.moved')); }} />
+        <SheetBtn danger icon={<IconTrash />} label={t('browse.deleteCat')} sub={t('browse.deleteCatSub')}
           onClick={() => { setMenu(false); setDelConfirm(true); }} />
       </Sheet>
 
       {/* 封面图来源 */}
-      <Sheet open={coverSheet} onClose={() => setCoverSheet(false)} title="设置封面图">
-        <SheetBtn icon={<IconCamera />} label="拍照" onClick={() => { setCoverSheet(false); pickCover('camera'); }} />
-        <SheetBtn icon={<IconImage />} label="从相册选择" onClick={() => { setCoverSheet(false); pickCover('photos'); }} />
+      <Sheet open={coverSheet} onClose={() => setCoverSheet(false)} title={t('browse.setCover')}>
+        <SheetBtn icon={<IconCamera />} label={t('common.camera')} onClick={() => { setCoverSheet(false); pickCover('camera'); }} />
+        <SheetBtn icon={<IconImage />} label={t('common.gallery')} onClick={() => { setCoverSheet(false); pickCover('photos'); }} />
       </Sheet>
 
-      <NameDialog open={newCatOpen} title="新建目录" placeholder="例如：卧室 / 数码配件"
+      <NameDialog open={newCatOpen} title={t('browse.newCategory')} placeholder={t('browse.newCatPlaceholder')}
         onCancel={() => setNewCatOpen(false)}
         onOk={(n) => { setNewCatOpen(false); createCategory(n); }} />
-      <NameDialog open={renaming} title="重命名目录" initial={current?.name}
+      <NameDialog open={renaming} title={t('browse.rename')} initial={current?.name}
         onCancel={() => setRenaming(false)}
         onOk={(n) => { setRenaming(false); renameCategory(n); }} />
-      <Confirm open={delConfirm} danger title="删除这个目录？"
-        desc={`「${current?.name ?? ''}」及其所有子目录、物品、照片都会被删除，不可恢复。`}
-        okText="删除" onCancel={() => setDelConfirm(false)} onOk={removeCategory} />
+      <Confirm open={delConfirm} danger title={t('browse.deleteCatTitle')}
+        desc={t('browse.deleteCatDesc', { name: current?.name ?? '' })}
+        okText={t('common.delete')} onCancel={() => setDelConfirm(false)} onOk={removeCategory} />
     </div>
   );
 }
@@ -323,16 +325,17 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 function MoveCategoryRow({ id, onDone }: { id: string; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
   return (
     <>
-      <SheetBtn icon={<IconMove />} label="移动到…"
+      <SheetBtn icon={<IconMove />} label={t('browse.moveTo')}
         onClick={() => setOpen(true)} />
       <CategoryPicker
         open={open}
         excludeId={id}
         onClose={() => setOpen(false)}
         onPick={async (target) => {
-          if (target === id) { toast('不能移动到自身'); return; }
+          if (target === id) { toast(t('browse.cantMoveSelf')); return; }
           await db.categories.update(id, { parentId: target });
           setOpen(false);
           onDone();
@@ -347,6 +350,7 @@ export function NameDialog({ open, title, placeholder, initial, onOk, onCancel }
   onOk: (name: string) => void; onCancel: () => void;
 }) {
   const [val, setVal] = useState('');
+  const { t } = useTranslation();
   useEffect(() => {
     if (open) setVal(initial ?? '');
   }, [open, initial]);
@@ -361,9 +365,9 @@ export function NameDialog({ open, title, placeholder, initial, onOk, onCancel }
           placeholder={placeholder} className={inputCls} />
         <div className="flex gap-2 mt-4">
           <button onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-[15px] font-medium">取消</button>
+            className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-[15px] font-medium">{t('common.cancel')}</button>
           <button onClick={() => val.trim() && onOk(val)} disabled={!val.trim()}
-            className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-[15px] font-medium disabled:opacity-40">确定</button>
+            className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-[15px] font-medium disabled:opacity-40">{t('common.ok')}</button>
         </div>
       </div>
     </div>

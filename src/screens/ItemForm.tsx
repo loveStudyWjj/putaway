@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { db, uid, saveItem, pathText, ensureCategoryPath, getItemImages } from '../db';
@@ -24,13 +25,14 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
   const nav = useNav();
   const { toast } = useToast();
   const { bump } = useDataVersion();
+  const { t } = useTranslation();
 
   const [item, setItem] = useState<Item | null>(null);
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [compressing, setCompressing] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [catLabel, setCatLabel] = useState('根目录');
+  const [catLabel, setCatLabel] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [suggestPath, setSuggestPath] = useState('');
   const [addSheet, setAddSheet] = useState(false);
@@ -49,7 +51,7 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
     (async () => {
       if (itemId) {
         const it = await db.items.get(itemId);
-        if (!it) { toast('物品不存在'); nav.pop(); return; }
+        if (!it) { toast(t('form.itemNotFound')); nav.pop(); return; }
         setItem(it);
         const blobs = await getItemImages(it);
         setPhotos(
@@ -98,7 +100,7 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
         runRecognize(blob);
       }
     } catch (e: any) {
-      toast(e?.message ?? '图片处理失败');
+      toast(e?.message ?? t('form.photoFailed'));
     } finally {
       setCompressing(false);
     }
@@ -117,7 +119,7 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
       for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       await applyPhoto(new Blob([arr], { type: `image/${photo.format || 'jpeg'}` }), true);
     } catch (e: any) {
-      if (e?.message && !/cancel/i.test(e.message)) toast(`打开失败：${e.message}`);
+      if (e?.message && !/cancel/i.test(e.message)) toast(t('common.openFailed', { msg: e.message }));
     }
   };
 
@@ -161,10 +163,10 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
         };
       });
       if (r.categoryPath) setSuggestPath(r.categoryPath);
-      toast('识别完成，可修改后保存');
+      toast(t('form.recogDone'));
     } catch (e: any) {
       aiRan.current = false;
-      toast(e?.message ?? '识别失败');
+      toast(e?.message ?? t('form.recogFailed'));
     } finally {
       setAiLoading(false);
     }
@@ -172,15 +174,15 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
 
   const save = async () => {
     if (!item) return;
-    if (!item.name.trim()) { toast('请填写物品名称'); return; }
+    if (!item.name.trim()) { toast(t('form.nameRequired')); return; }
     setSaving(true);
     try {
       await saveItem(item, photos.map((p) => (p.id ? { id: p.id } : { blob: p.blob })));
       bump();
-      toast('已保存');
+      toast(t('form.saved'));
       nav.pop();
     } catch (e: any) {
-      toast(`保存失败：${e?.message ?? e}`);
+      toast(t('form.saveFailed', { msg: e?.message ?? e }));
       setSaving(false);
     }
   };
@@ -213,10 +215,10 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
 
   return (
     <div className="min-h-screen bg-white pb-[calc(2rem+env(safe-area-inset-bottom))]">
-      <TopBar title={itemId ? '编辑物品' : '添加物品'} onBack={nav.pop}
+      <TopBar title={itemId ? t('form.editTitle') : t('form.addTitle')} onBack={nav.pop}
         right={<button onClick={save} disabled={saving}
           className="px-4 py-1.5 mr-1 rounded-full bg-brand-600 text-white text-sm font-medium disabled:opacity-50">
-          {saving ? '保存中' : '保存'}
+          {saving ? t('common.saving') : t('common.save')}
         </button>} />
 
       {/* 照片区 */}
@@ -230,7 +232,7 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
                   {aiLoading && i === photos.length - 1 && (
                     <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-1.5">
                       <Spinner className="w-6 h-6" />
-                      <span className="text-[11px]">识别中</span>
+                      <span className="text-[11px]">{t('form.recognizing')}</span>
                     </div>
                   )}
                   <button onClick={() => removePhoto(i)}
@@ -242,19 +244,19 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
               {compressing && (
                 <div className="shrink-0 w-36 aspect-square rounded-2xl bg-gray-100 flex flex-col items-center justify-center gap-1.5 text-gray-400">
                   <Spinner className="w-6 h-6" />
-                  <span className="text-[11px]">处理中…</span>
+                  <span className="text-[11px]">{t('form.processing')}</span>
                 </div>
               )}
               <button onClick={() => setAddSheet(true)}
                 className="shrink-0 w-36 aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1.5 text-gray-300 active:border-brand-500 active:text-brand-500">
                 <IconPlus className="w-7 h-7" />
-                <span className="text-xs">加照片</span>
+                <span className="text-xs">{t('form.addPhoto')}</span>
               </button>
             </div>
             <div className="flex gap-2 mt-3">
               <button onClick={() => runRecognize()} disabled={aiLoading}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-brand-50 text-brand-600 text-[13px] font-medium disabled:opacity-60">
-                <IconSparkle className="w-4 h-4" /> {aiLoading ? 'AI 识别中…' : 'AI 识别（用最后一张，不覆盖已填项）'}
+                <IconSparkle className="w-4 h-4" /> {aiLoading ? t('form.aiBtnLoading') : t('form.aiBtn')}
               </button>
             </div>
           </>
@@ -263,15 +265,15 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
             <div className="w-14 h-14 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center">
               <IconCamera className="w-7 h-7" />
             </div>
-            <p className="text-sm text-gray-400">拍张照片，AI 帮你填信息</p>
+            <p className="text-sm text-gray-400">{t('form.photoHint')}</p>
             <div className="flex gap-2">
               <button onClick={() => pick('camera')}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-medium">
-                <IconCamera className="w-4 h-4" /> 拍照
+                <IconCamera className="w-4 h-4" /> {t('common.camera')}
               </button>
               <button onClick={() => pick('photos')}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
-                <IconImage className="w-4 h-4" /> 相册
+                <IconImage className="w-4 h-4" /> {t('common.gallery')}
               </button>
             </div>
           </div>
@@ -285,22 +287,22 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
       </div>
 
       <div className="px-4">
-        <Field label="名称">
-          <input className={inputCls} value={item.name} placeholder="例如：Switch 游戏机"
+        <Field label={t('form.name')}>
+          <input className={inputCls} value={item.name} placeholder={t('form.namePlaceholder')}
             onChange={(e) => setItem({ ...item, name: e.target.value })} />
         </Field>
 
         <div className="flex gap-3">
           <div className="flex-1">
-            <Field label="存放位置">
+            <Field label={t('form.location')}>
               <button onClick={() => setPickerOpen(true)}
                 className={`${inputCls} text-left flex items-center justify-between`}>
                 <span className="truncate">{catLabel}</span>
-                <span className="text-gray-400 text-xs shrink-0 ml-2">更换</span>
+                <span className="text-gray-400 text-xs shrink-0 ml-2">{t('form.change')}</span>
               </button>
             </Field>
           </div>
-          <Field label="数量">
+          <Field label={t('form.quantity')}>
             <div className="flex items-center gap-3 h-[46px]">
               <button onClick={() => setItem({ ...item, quantity: Math.max(1, item.quantity - 1) })}
                 className="w-10 h-10 rounded-xl bg-gray-100 text-lg text-gray-600 active:bg-gray-200">−</button>
@@ -318,43 +320,43 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
               setItem({ ...item, categoryId: id });
               setCatLabel(await pathText(id));
               setSuggestPath('');
-              toast(`已移到「${suggestPath}」`);
+              toast(t('form.movedTo', { path: suggestPath }));
             }}
             className="w-full mb-4 flex items-center gap-2 px-3.5 py-3 rounded-xl bg-brand-50 text-brand-700 text-sm text-left active:bg-brand-100">
             <IconSparkle className="w-4 h-4 shrink-0" />
-            <span className="flex-1">AI 建议分类：<b>{suggestPath}</b>（点击应用）</span>
+            <span className="flex-1">{t('form.aiSuggest')}<b>{suggestPath}</b>{t('form.aiSuggestHint')}</span>
           </button>
         )}
 
-        <Field label="描述">
+        <Field label={t('form.description')}>
           <textarea className={`${inputCls} resize-none`} rows={2} value={item.description}
-            placeholder="一句话备注（可选）"
+            placeholder={t('form.descPlaceholder')}
             onChange={(e) => setItem({ ...item, description: e.target.value })} />
         </Field>
 
         {/* 属性 */}
         <div className="mb-4">
-          <span className="block text-[13px] font-medium text-gray-500 mb-1.5">属性</span>
+          <span className="block text-[13px] font-medium text-gray-500 mb-1.5">{t('form.attributes')}</span>
           {Object.entries(item.attributes).map(([k, v], i) => (
             <div key={i} className="flex gap-2 mb-2 items-center">
-              <input className={`${inputCls} !w-[38%]`} defaultValue={k} placeholder="属性名"
+              <input className={`${inputCls} !w-[38%]`} defaultValue={k} placeholder={t('form.attrName')}
                 onBlur={(e) => renameAttr(k, e.target.value, item.attributes[k])} />
-              <input className={inputCls} value={v} placeholder="值"
+              <input className={inputCls} value={v} placeholder={t('form.attrValue')}
                 onChange={(e) => setAttr(k, e.target.value)} />
               <button onClick={() => delAttr(k)} className="p-2 text-gray-300 active:text-red-500 shrink-0">
                 <IconClose className="w-4 h-4" />
               </button>
             </div>
           ))}
-          <button onClick={() => setAttr(`属性${Object.keys(item.attributes).length + 1}`, '')}
+          <button onClick={() => setAttr(t('form.attrDefault', { n: Object.keys(item.attributes).length + 1 }), '')}
             className="flex items-center gap-1 text-sm text-brand-600 py-1.5 active:opacity-60">
-            <IconPlus className="w-4 h-4" /> 添加属性
+            <IconPlus className="w-4 h-4" /> {t('form.addAttr')}
           </button>
         </div>
 
         {/* 标签 */}
         <div className="mb-6">
-          <span className="block text-[13px] font-medium text-gray-500 mb-1.5">标签</span>
+          <span className="block text-[13px] font-medium text-gray-500 mb-1.5">{t('form.tags')}</span>
           <div className="flex flex-wrap gap-2 mb-2">
             {item.tags.map((t) => (
               <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-[13px] text-gray-600">
@@ -366,23 +368,23 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
             ))}
           </div>
           <div className="flex gap-2">
-            <input className={inputCls} value={tagDraft} placeholder="输入标签后回车"
+            <input className={inputCls} value={tagDraft} placeholder={t('form.tagPlaceholder')}
               onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())} />
-            <button onClick={addTag} className="px-4 rounded-xl bg-gray-100 text-gray-600 text-sm shrink-0">添加</button>
+            <button onClick={addTag} className="px-4 rounded-xl bg-gray-100 text-gray-600 text-sm shrink-0">{t('form.addTag')}</button>
           </div>
         </div>
       </div>
 
-      <Sheet open={addSheet} onClose={() => setAddSheet(false)} title="添加照片">
-        <SheetBtn icon={<IconCamera />} label="拍照"
+      <Sheet open={addSheet} onClose={() => setAddSheet(false)} title={t('form.addPhotoSheet')}>
+        <SheetBtn icon={<IconCamera />} label={t('common.camera')}
           onClick={() => { setAddSheet(false); pick('camera'); }} />
-        <SheetBtn icon={<IconImage />} label="从相册选择"
+        <SheetBtn icon={<IconImage />} label={t('common.gallery')}
           onClick={() => { setAddSheet(false); pick('photos'); }} />
       </Sheet>
 
       <CategoryPicker open={pickerOpen} onClose={() => setPickerOpen(false)}
-        title="存放位置"
+        title={t('picker.storageLocation')}
         onPick={async (id) => {
           setItem({ ...item, categoryId: id });
           setCatLabel(await pathText(id));

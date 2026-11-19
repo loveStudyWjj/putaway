@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import i18n from './i18n';
 import type { Category, Item, ImageRec } from './types';
 
 class AppDB extends Dexie {
@@ -65,7 +66,7 @@ export async function pathOf(categoryId: string): Promise<Category[]> {
 
 export async function pathText(categoryId: string): Promise<string> {
   const p = await pathOf(categoryId);
-  return p.map((c) => c.name).join('/') || '根目录';
+  return p.map((c) => c.name).join('/') || i18n.t('common.root');
 }
 
 /** 自身 + 所有子孙目录 id */
@@ -249,7 +250,7 @@ export async function exportData(): Promise<string> {
 export async function importData(json: string): Promise<{ cats: number; items: number }> {
   const data = JSON.parse(json);
   if (!Array.isArray(data.categories) || !Array.isArray(data.items)) {
-    throw new Error('备份文件格式不正确');
+    throw new Error(i18n.t('db.badBackup'));
   }
   // 兼容旧版备份：imageId → imageIds
   const items: Item[] = data.items.map((it: any) => ({

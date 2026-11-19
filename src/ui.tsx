@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 // ---------- 图标（内联 SVG，描边风格） ----------
 type Ip = { className?: string };
@@ -124,10 +125,11 @@ export function SheetBtn({ onClick, icon, label, sub, danger }: {
 }
 
 // ---------- 确认弹窗 ----------
-export function Confirm({ open, title, desc, okText = '确定', danger, onOk, onCancel }: {
+export function Confirm({ open, title, desc, okText, danger, onOk, onCancel }: {
   open: boolean; title: string; desc?: string; okText?: string; danger?: boolean;
   onOk: () => void; onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-8" onClick={onCancel}>
@@ -137,11 +139,11 @@ export function Confirm({ open, title, desc, okText = '确定', danger, onOk, on
         {desc && <p className="text-sm text-gray-500 mt-2 leading-relaxed">{desc}</p>}
         <div className="flex gap-2 mt-5">
           <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-[15px] font-medium active:bg-gray-200">
-            取消
+            {t('common.cancel')}
           </button>
           <button onClick={onOk}
             className={`flex-1 py-2.5 rounded-xl text-white text-[15px] font-medium ${danger ? 'bg-red-500 active:bg-red-600' : 'bg-brand-600 active:bg-brand-700'}`}>
-            {okText}
+            {okText ?? t('common.ok')}
           </button>
         </div>
       </div>
@@ -174,6 +176,7 @@ export function BottomNav({ active, onHome, onSearch, onSettings }: {
   active: 'home' | 'search' | 'settings';
   onHome: () => void; onSearch: () => void; onSettings: () => void;
 }) {
+  const { t } = useTranslation();
   const Btn = ({ on, onClick, icon, label }: any) => (
     <button onClick={onClick}
       className={`flex-1 flex flex-col items-center gap-0.5 py-2 ${on ? 'text-brand-600' : 'text-gray-400'}`}>
@@ -183,9 +186,9 @@ export function BottomNav({ active, onHome, onSearch, onSettings }: {
   );
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 flex pb-[env(safe-area-inset-bottom)]">
-      <Btn on={active === 'home'} onClick={onHome} icon={<IconHome className="w-6 h-6" />} label="首页" />
-      <Btn on={active === 'search'} onClick={onSearch} icon={<IconSearch className="w-6 h-6" />} label="搜索" />
-      <Btn on={active === 'settings'} onClick={onSettings} icon={<IconSettings className="w-6 h-6" />} label="设置" />
+      <Btn on={active === 'home'} onClick={onHome} icon={<IconHome className="w-6 h-6" />} label={t('nav.home')} />
+      <Btn on={active === 'search'} onClick={onSearch} icon={<IconSearch className="w-6 h-6" />} label={t('nav.search')} />
+      <Btn on={active === 'settings'} onClick={onSettings} icon={<IconSettings className="w-6 h-6" />} label={t('nav.settings')} />
     </nav>
   );
 }

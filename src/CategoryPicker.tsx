@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from './db';
 import type { Category } from './types';
 import { Sheet, IconFolder } from './ui';
@@ -9,7 +10,7 @@ interface Node {
 }
 
 /** 目录树选择弹层：选择目标位置 */
-export function CategoryPicker({ open, onClose, onPick, excludeId, title = '选择位置' }: {
+export function CategoryPicker({ open, onClose, onPick, excludeId, title }: {
   open: boolean;
   onClose: () => void;
   onPick: (categoryId: string) => void;
@@ -17,6 +18,7 @@ export function CategoryPicker({ open, onClose, onPick, excludeId, title = '选�
   excludeId?: string;
   title?: string;
 }) {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
 
@@ -60,9 +62,9 @@ export function CategoryPicker({ open, onClose, onPick, excludeId, title = '选�
   }, [open, excludeId]);
 
   return (
-    <Sheet open={open} onClose={onClose} title={title}>
+    <Sheet open={open} onClose={onClose} title={title ?? t('picker.title')}>
       <div className="max-h-[55vh] overflow-y-auto -mx-1">
-        <PickRow depth={0} name="根目录" disabled={false}
+        <PickRow depth={0} name={t('picker.root')} disabled={false}
           onClick={() => onPick('')} />
         {nodes.map(({ cat, depth }) => (
           <PickRow key={cat.id} depth={depth + 1} name={cat.name}
@@ -70,7 +72,7 @@ export function CategoryPicker({ open, onClose, onPick, excludeId, title = '选�
             onClick={() => onPick(cat.id)} />
         ))}
         {nodes.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-6">还没有目录</p>
+          <p className="text-sm text-gray-400 text-center py-6">{t('picker.empty')}</p>
         )}
       </div>
     </Sheet>

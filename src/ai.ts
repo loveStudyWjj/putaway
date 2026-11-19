@@ -1,9 +1,15 @@
 import type { AiResult } from './types';
 import type { AiSettings } from './settings';
+import i18n, { currentLang } from './i18n';
 
-const PROMPT = `你是物品识别助手。观察图片中的物品，只输出一个 JSON 对象（不要输出其他文字、不要用代码块包裹）：
+const PROMPTS: Record<string, string> = {
+  zh: `你是物品识别助手。观察图片中的物品，只输出一个 JSON 对象（不要输出其他文字、不要用代码块包裹）：
 {"name":"物品名称","categoryPath":"建议分类路径，层级用/分隔，例如 厨房/调料","description":"一句话描述","quantity":1,"attributes":{"属性名":"属性值"},"tags":["标签"]}
-规则：name 用简洁中文名；attributes 只保留图片中能看出的属性（如品牌/颜色/材质/型号/规格/数量单位），不确定就留空对象；quantity 取整数；tags 给 1-3 个。 /no_think`;
+规则：name 用简洁中文名；attributes 只保留图片中能看出的属性（如品牌/颜色/材质/型号/规格/数量单位），不确定就留空对象；quantity 取整数；tags 给 1-3 个。 /no_think`,
+  en: `You are an item recognition assistant. Look at the item in the image and output ONLY a JSON object (no other text, no code fences):
+{"name":"item name","categoryPath":"suggested category path, levels separated by /, e.g. Kitchen/Spices","description":"one-sentence description","quantity":1,"attributes":{"attr name":"attr value"},"tags":["tag"]}
+Rules: name should be concise; attributes only include properties visible in the image (brand/color/material/model/spec/unit), use an empty object when unsure; quantity is an integer; provide 1-3 tags. /no_think`,
+};
 
 function extractJson(text: string): any {
   let t = text.trim();
@@ -16,8 +22,8 @@ function extractJson(text: string): any {
 }
 
 export async function recognizeItem(base64Jpeg: string, s: AiSettings): Promise<AiResult> {
-  if (!s.apiKey) throw new Error('请先在「设置」里填写 API Key');
-  if (!s.model) throw new Error('请先在「设置」里填写模型名称');
+  if (!s.apiKey) throw new Error(i18n.t('ai.noKey'));
+  if (!s.model) throw new Error(i18n.t('ai.noModel'));
 
   const url = s.baseUrl.replace(/\/+$/, '') + '/chat/completions';
   const ctrl = new AbortController();
@@ -42,7 +48,7 @@ export async function recognizeItem(base64Jpeg: string, s: AiSettings): Promise<
           {
             role: 'user',
             content: [
-              { type: 'text', text: PROMPT },
+              { type: 'text', text: PROMPTS[currentLang()] },
               { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Jpeg}` } },
             ],
           },
@@ -50,7 +56,7 @@ export async function recognizeItem(base64Jpeg: string, s: AiSettings): Promise<
       }),
     });
   } catch (e: any) {
-    throw new Error(e?.name === 'AbortError' ? '识别超时，请检查网络后重试' : `网络错误：${e?.message ?? e}`);
+    throw new Error(e?.name === 'AbortError' ? i18n.t('ai.timeout') : i18n.t('ai.networkError', { msg: e?.message ?? e }));
   } finally {
     clearTimeout(timer);
   }
@@ -63,16 +69,16 @@ export async function recognizeItem(base64Jpeg: string, s: AiSettings): Promise<
     } catch {
       msg = body.slice(0, 200) || msg;
     }
-    throw new Error(`识别失败：${msg}`);
+    throw new Error(i18n.t('ai.failed', { msg }));
   }
 
   let content = '';
   try {
     content = JSON.parse(body).choices?.[0]?.message?.content ?? '';
   } catch {
-    throw new Error('接口返回格式异常');
+    throw new Error(i18n.t('ai.badFormat'));
   }
-  if (!content) throw new Error('模型未返回内容，该模型可能不支持识图');
+  if (!content) throw new Error(i18n.t('ai.noContent'));
 
   const raw = extractJson(content);
   const attrs: Record<string, string> = {};

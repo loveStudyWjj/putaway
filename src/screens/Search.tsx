@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db, pathText, searchItems } from '../db';
 import type { Item } from '../types';
 import { useNav } from '../store';
@@ -9,6 +10,7 @@ let lastQuery = '';
 
 export function SearchScreen() {
   const nav = useNav();
+  const { t } = useTranslation();
   const [q, setQ] = useState(lastQuery);
   const [results, setResults] = useState<Item[]>([]);
   const [paths, setPaths] = useState<Record<string, string>>({});
@@ -47,14 +49,14 @@ export function SearchScreen() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
-      <TopBar title="搜索" onBack={nav.pop} />
+      <TopBar title={t('search.title')} onBack={nav.pop} />
 
       <div className="p-4">
         <div className="relative">
           <IconSearch className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="搜名称、属性、标签…"
+            placeholder={t('search.placeholder')}
             className="w-full bg-white border border-gray-200 rounded-2xl pl-11 pr-10 py-3 text-[15px] outline-none focus:border-brand-500 placeholder:text-gray-300"
           />
           {q && (
@@ -68,10 +70,10 @@ export function SearchScreen() {
 
       <div className="px-4">
         {!searched ? (
-          <Empty icon={<IconSearch className="w-16 h-16" />} title="输入关键词搜索"
-            desc="会匹配物品名称、描述、属性和标签" />
+          <Empty icon={<IconSearch className="w-16 h-16" />} title={t('search.hint')}
+            desc={t('search.hintDesc')} />
         ) : results.length === 0 ? (
-          <Empty title={`没有找到「${q}」相关物品`} />
+          <Empty title={t('search.noResult', { q })} />
         ) : (
           <div className="space-y-2">
             {results.map((it) => (
@@ -88,7 +90,7 @@ export function SearchScreen() {
                     {it.quantity > 1 && <span className="text-gray-400 text-sm"> ×{it.quantity}</span>}
                   </p>
                   <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-0.5">
-                    <IconPin className="w-3 h-3 shrink-0" /> {paths[it.id] ?? '根目录'}
+                    <IconPin className="w-3 h-3 shrink-0" /> {paths[it.id] ?? t('common.root')}
                   </p>
                   {it.description && (
                     <p className="text-xs text-gray-400 truncate mt-0.5">{it.description}</p>
