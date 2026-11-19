@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "物归处 - 离线物品收纳管理",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
