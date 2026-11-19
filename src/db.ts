@@ -379,7 +379,8 @@ export function expiryDaysLeft(it: Item, now = Date.now()): number | null {
   if (!it.expiryDate) return null;
   const t = new Date(it.expiryDate + 'T23:59:59').getTime();
   if (Number.isNaN(t)) return null;
-  return Math.ceil((t - now) / 86400000);
+  // floor：到期当天为 0（ceil 会把当天算成 1、昨天算成 -0 导致漏判过期）
+  return Math.floor((t - now) / 86400000);
 }
 
 /** 到期状态：expired 已过期 / soon 30天内 / null */

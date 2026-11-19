@@ -95,7 +95,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                         <IconFolder className="w-6 h-6" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[15px] font-medium text-gray-800 dark:text-gray-100 truncate">{c.name}</p>
+                        <p className="text-[15px] font-medium text-gray-800 dark:text-gray-100 truncate"><Hl text={c.name} q={q} /></p>
                         <p className="text-xs text-gray-400 truncate mt-0.5 flex items-center gap-0.5">
                           <IconPin className="w-3 h-3 shrink-0" /> {paths[c.id] ?? t('common.root')}
                         </p>
@@ -123,7 +123,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[15px] font-medium text-gray-800 dark:text-gray-100 truncate">
-                          {it.name}
+                          <Hl text={it.name} q={q} />
                           {it.quantity > 1 && <span className="text-gray-400 text-sm"> ×{it.quantity}</span>}
                           {it.lentTo && <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-normal">{t('browse.lentBadge')} · {it.lentTo}</span>}
                         </p>
@@ -131,7 +131,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                           <IconPin className="w-3 h-3 shrink-0" /> {paths[it.id] ?? t('common.root')}
                         </p>
                         {it.description && (
-                          <p className="text-xs text-gray-400 truncate mt-0.5">{it.description}</p>
+                          <p className="text-xs text-gray-400 truncate mt-0.5"><Hl text={it.description} q={q} /></p>
                         )}
                       </div>
                     </button>
@@ -148,5 +148,20 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
         onSearch={() => {}}
         onSettings={() => nav.replace({ name: 'settings' })} />
     </div>
+  );
+}
+
+/** 命中词高亮：把文本中匹配 query 的部分包 <mark> */
+function Hl({ text, q }: { text: string; q: string }) {
+  const kw = q.trim();
+  if (!kw) return <>{text}</>;
+  const i = text.toLowerCase().indexOf(kw.toLowerCase());
+  if (i < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark>{text.slice(i, i + kw.length)}</mark>
+      {text.slice(i + kw.length)}
+    </>
   );
 }

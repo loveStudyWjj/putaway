@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="add_item"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_add"
+        android:shortcutLongLabel="@string/shortcut_add">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.wugui.app"
+            android:targetClass="com.wugui.app.MainActivity"
+            android:data="wugui://add" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_search"
+        android:shortcutLongLabel="@string/shortcut_search">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.wugui.app"
+            android:targetClass="com.wugui.app.MainActivity"
+            android:data="wugui://search" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

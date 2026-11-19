@@ -8,6 +8,7 @@ import { useNav, useToast, useDataVersion } from '../store';
 import { compressImage, makeThumb, blobToBase64 } from '../image';
 import { scheduleExpiry } from '../notify';
 import { recognizeItem } from '../ai';
+import { takeProduct } from '../barcode';
 import { loadSettings } from '../settings';
 import { CategoryPicker } from '../CategoryPicker';
 import {
@@ -81,6 +82,25 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
       const blob = await (await fetch(pending)).blob();
       await applyPhoto(blob, true);
     })();
+  }, [item]);
+
+  // 扫码页识别到的商品条码 → 预填名称/品牌/类目
+  useEffect(() => {
+    if (!item || itemId) return;
+    const p = takeProduct();
+    if (!p) return;
+    setItem((it) => it && {
+      ...it,
+      name: p.name || it.name,
+      barcode: p.barcode,
+      attributes: {
+        ...it.attributes,
+        barcode: p.barcode,
+        ...(p.brand ? { brand: p.brand } : {}),
+        ...(p.category ? { category: p.category } : {}),
+      },
+    });
+    if (!p.name) toast(t('barcode.lookupFail'));
   }, [item]);
 
   useEffect(

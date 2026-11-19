@@ -11,7 +11,12 @@ import { rescheduleAllExpiries } from '../notify';
 import { useNav, useToast, useDataVersion } from '../store';
 import {
   TopBar, Field, inputCls, BottomNav, Confirm, IconSparkle, IconBox, IconClock,
+  Sheet, IconCheck, IconQr,
 } from '../ui';
+import { makeLabelSheet } from '../labelsheet';
+import { shareBlobFile } from '../sharefile';
+import { categoryMap, pathTextFromMap } from '../db';
+import type { Category } from '../types';
 
 export function SettingsScreen() {
   const nav = useNav();
@@ -26,6 +31,9 @@ export function SettingsScreen() {
   const [importText, setImportText] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(-1); // -1 = 空闲；0~1 进行中
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printCats, setPrintCats] = useState<{ cat: Category; path: string }[]>([]);
+  const [printSel, setPrintSel] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const save = () => {
@@ -239,6 +247,16 @@ export function SettingsScreen() {
               {t('logs.title')}
             </button>
           </div>
+          <button onClick={async () => {
+              const map = await categoryMap();
+              const all = Array.from(map.values())
+                .map((cat) => ({ cat, path: pathTextFromMap(map, cat.id) }))
+                .sort((a, b) => a.path.localeCompare(b.path, 'zh'));
+              setPrintCats(all); setPrintSel(new Set()); setPrintOpen(true);
+            }}
+            className="w-full mt-2 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-medium active:bg-gray-200 flex items-center justify-center gap-2">
+            <IconQr className="w-4 h-4" /> {t('printQr.title')}
+          </button>
           <button onClick={() => setClearConfirm(true)}
             className="w-full mt-3 py-3 rounded-xl border border-red-100 dark:border-red-900/40 text-red-500 text-[15px] font-medium active:bg-red-50 dark:active:bg-red-500/10">
             {t('settings.clearAll')}
@@ -257,11 +275,54 @@ export function SettingsScreen() {
         desc={t('settings.clearDesc')} okText={t('settings.clearOk')}
         onCancel={() => setClearConfirm(false)}
         onOk={async () => {
-          await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear()]);
+          await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear(), db.trash.clear(), db.logs.clear()]);
           bump();
           toast(t('settings.cleared'));
           setClearConfirm(false);
         }} />
+
+      <Sheet open={printOpen} onClose={() => setPrintOpen(false)} title={t('printQr.title')}>
+        <p className="text-xs text-gray-400 px-1 mb-2">{t('printQr.pick')}</p>
+        <div className="max-h-72 overflow-y-auto space-y-1 mb-3">
+          {printCats.map(({ cat, path }) => {
+            const on = printSel.has(cat.id);
+            return (
+              <button key={cat.id}
+                onClick={() => {
+                  const next = new Set(printSel);
+                  if (on) next.delete(cat.id);
+                  else if (next.size < 12) next.add(cat.id);
+                  else { toast(t('printQr.tooMany')); return; }
+                  setPrintSel(next);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left active:bg-gray-50 dark:active:bg-gray-800">
+                <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                  on ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-300 dark:border-gray-600'}`}>
+                  {on && <IconCheck className="w-3.5 h-3.5" />}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm text-gray-800 dark:text-gray-100 truncate">{cat.name}</span>
+                  <span className="block text-[11px] text-gray-400 truncate">{path}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <button disabled={printSel.size === 0 || busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const picked = printCats.filter((c) => printSel.has(c.cat.id));
+              const blob = await makeLabelSheet(picked);
+              await shareBlobFile(blob, `wugui-labels-${picked.length}.png`);
+              toast(t('printQr.done'));
+              setPrintOpen(false);
+            } finally { setBusy(false); }
+          }}
+          className="w-full py-3 rounded-xl bg-brand-600 text-white text-[15px] font-medium active:bg-brand-700 disabled:opacity-40">
+          {t('printQr.make')}{printSel.size > 0 ? ` (${printSel.size})` : ''}
+        </button>
+      </Sheet>
 
       <BottomNav active="settings"
         onHome={() => nav.reset()}

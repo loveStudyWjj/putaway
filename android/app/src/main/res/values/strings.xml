@@ -4,4 +4,7 @@
     <string name="title_activity_main">物归处</string>
     <string name="package_name">com.wugui.app</string>
     <string name="custom_url_scheme">com.wugui.app</string>
+    <string name="shortcut_add">添加物品</string>
+    <string name="shortcut_search">搜索</string>
+    <string name="widget_empty">打开应用查看物品统计</string>
 </resources>

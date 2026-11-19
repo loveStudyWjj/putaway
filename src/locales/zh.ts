@@ -119,6 +119,7 @@ export default {
   },
   image: { processFailed: '图片处理失败', loadFailed: '图片加载失败' },
   db: { badBackup: '备份文件格式不正确' },
+  widget: { stats: '过期 {{expired}} · 临期 {{soon}} · 借出 {{lent}} · 共 {{total}} 件' },
   trash: {
     title: '回收站', empty: '回收站是空的', hint: '删除的内容保留 30 天后自动清理',
     restore: '恢复', purge: '彻底删除', emptyAll: '清空回收站',

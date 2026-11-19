@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { viewNav } from './viewnav';
+import { pushWidgetStats } from './widget';
 
 export type Screen =
   | { name: 'browse'; categoryId: string }
@@ -102,6 +103,34 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return () => {
       h.then((l) => l.remove());
     };
+  }, []);
+
+  // wugui:// 深链：扫码跳转/桌面快捷方式（c/<id> 目录、search、add）
+  useEffect(() => {
+    const open = (url?: string) => {
+      if (!url || !url.startsWith('wugui://')) return;
+      const target = url.slice('wugui://'.length).replace(/^\/+|\/+$/g, '');
+      if (target.startsWith('c/')) push({ name: 'browse', categoryId: decodeURIComponent(target.slice(2)) });
+      else if (target === 'search') push({ name: 'search' });
+      else if (target === 'add') push({ name: 'itemForm' });
+    };
+    const h = CapApp.addListener('appUrlOpen', ({ url }) => open(url));
+    void CapApp.getLaunchUrl().then((r) => open(r?.url));
+    return () => { h.then((l) => l.remove()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 桌面 Widget 供数：数据版本变化 + 退后台时刷新
+  useEffect(() => {
+    const t = setTimeout(() => void pushWidgetStats(), 800);
+    return () => clearTimeout(t);
+  }, [v]);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const h = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) void pushWidgetStats();
+    });
+    return () => { h.then((l) => l.remove()); };
   }, []);
 
   return (

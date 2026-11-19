@@ -122,6 +122,7 @@ export default {
   },
   image: { processFailed: 'Image processing failed', loadFailed: 'Failed to load image' },
   db: { badBackup: 'Invalid backup file format' },
+  widget: { stats: 'Expired {{expired}} · Expiring {{soon}} · Lent {{lent}} · {{total}} items' },
   trash: {
     title: 'Trash', empty: 'Trash is empty', hint: 'Deleted content is kept for 30 days',
     restore: 'Restore', purge: 'Delete forever', emptyAll: 'Empty trash',

@@ -2,4 +2,9 @@
 <resources>
     <string name="app_name">WuGui</string>
     <string name="title_activity_main">WuGui</string>
+    <string name="shortcut_add">Add item</string>
+    <string name="shortcut_search">Search</string>
+    <string name="package_name">com.wugui.app</string>
+    <string name="custom_url_scheme">com.wugui.app</string>
+    <string name="widget_empty">Open the app to see item stats</string>
 </resources>

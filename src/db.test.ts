@@ -23,7 +23,10 @@ function makeItem(name: string, categoryId = '', extra: Partial<Item> = {}): Ite
 }
 
 async function clear() {
-  await Promise.all([db.categories.clear(), db.items.clear(), db.images.clear()]);
+  await Promise.all([
+    db.categories.clear(), db.items.clear(), db.images.clear(),
+    db.trash.clear(), db.logs.clear(),
+  ]);
   invalidateItemsCache();
 }
 
@@ -187,5 +190,96 @@ describe('备份', () => {
     const it = (await db.items.get('i1'))!;
     expect(it.imageIds).toEqual(['g1']);
     expect(it.searchText).toContain('旧物');
+  });
+});
+
+// ===== v4 新增：回收站 / 日志 / 关注聚合 / 数量步进 / 排序 =====
+const {
+  listTrash, restoreTrash, purgeTrash, emptyTrash, listLogs,
+  attentionItems, adjustQuantity, sortItems, loadSort,
+} = await import('./db');
+
+describe('回收站', () => {
+  it('删除物品进回收站，可恢复', async () => {
+    const it = makeItem('旧杯子');
+    await saveItem(it, []);
+    await deleteItem(it);
+    const rows = await listTrash();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('旧杯子');
+    expect(rows[0].snap.items).toHaveLength(1);
+    await restoreTrash(rows[0].id);
+    expect(await db.items.get(it.id)).toBeTruthy();
+    expect(await listTrash()).toHaveLength(0);
+  });
+
+  it('级联删除目录进回收站', async () => {
+    const catId = await ensureCategoryPath('箱A');
+    const it = makeItem('物', catId);
+    await saveItem(it, []);
+    await deleteCategoryCascade(catId);
+    const rows = await listTrash();
+    expect(rows[0].kind).toBe('category');
+    expect(rows[0].snap.cats).toHaveLength(1);
+    await purgeTrash(rows[0].id);
+    expect(await listTrash()).toHaveLength(0);
+  });
+
+  it('emptyTrash 清空', async () => {
+    await deleteItem(makeItem('a'));
+    await deleteItem(makeItem('b'));
+    await emptyTrash();
+    expect(await listTrash()).toHaveLength(0);
+  });
+});
+
+describe('操作日志', () => {
+  it('写操作产生日志', async () => {
+    await saveItem(makeItem('记一笔'), []);
+    await deleteItem(makeItem('删一笔'));
+    const logs = await listLogs();
+    expect(logs.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('关注聚合', () => {
+  it('已过期/临期/借出正确归类', async () => {
+    const past = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const soon = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    const far = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+    await saveItem(makeItem('过期', '', { expiryDate: past }), []);
+    await saveItem(makeItem('临期', '', { expiryDate: soon }), []);
+    await saveItem(makeItem('借出', '', { lentTo: '张三' }), []);
+    await saveItem(makeItem('远期', '', { expiryDate: far }), []);
+    await saveItem(makeItem('普通'), []);
+    const a = await attentionItems();
+    expect(a.expired.map((i) => i.name)).toEqual(['过期']);
+    expect(a.soon.map((i) => i.name)).toEqual(['临期']);
+    expect(a.lent.map((i) => i.name)).toEqual(['借出']);
+  });
+});
+
+describe('数量步进', () => {
+  it('加减有上下限', async () => {
+    const it = makeItem('计数', '', { quantity: 2 });
+    await saveItem(it, []);
+    expect(await adjustQuantity(it.id, 1)).toBe(3);
+    expect(await adjustQuantity(it.id, -5)).toBe(1);
+    expect(await adjustQuantity(it.id, 99999)).toBe(9999);
+  });
+});
+
+describe('排序', () => {
+  it('按名称/数量/到期排', async () => {
+    const mk = (name: string, extra: Partial<Item>) => makeItem(name, '', extra);
+    const list = [
+      mk('cherry', { quantity: 5 }),
+      mk('apple', { quantity: 1, expiryDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10) }),
+      mk('banana', { quantity: 3 }),
+    ];
+    expect(sortItems(list, 'quantity').map((i) => i.name)).toEqual(['cherry', 'banana', 'apple']);
+    expect(sortItems(list, 'expiry')[0].name).toBe('apple');
+    expect(sortItems(list, 'name').map((i) => i.name)).toEqual(['apple', 'banana', 'cherry']);
+    expect(loadSort().items).toBe('updated');
   });
 });

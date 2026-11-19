@@ -8,8 +8,10 @@ import { useNav, useToast, useDataVersion } from '../store';
 import { CategoryPicker } from '../CategoryPicker';
 import {
   TopBar, IconBtn, IconDots, IconEdit, IconTrash, IconMove, IconBox, IconPin, IconUser, IconClock,
-  Sheet, SheetBtn, Confirm,
+  Sheet, SheetBtn, Confirm, IconImage,
 } from '../ui';
+import { makeShareCard } from '../sharecard';
+import { shareBlobFile } from '../sharefile';
 
 export function ItemDetailScreen({ itemId }: { itemId: string }) {
   const nav = useNav();
@@ -208,6 +210,18 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
       </div>
 
       <Sheet open={menu} onClose={() => setMenu(false)}>
+        <SheetBtn icon={<IconImage />} label={t('shareCard.title')}
+          onClick={async () => {
+            setMenu(false);
+            try {
+              const blobs = await getItemImages(item);
+              const card = await makeShareCard(
+                item, blobs[0] ?? null, pathTextJoin(path) || t('common.root'), t('app.name')
+              );
+              await shareBlobFile(card, `${item.name}-card.png`);
+              toast(t('shareCard.done'));
+            } catch { toast(t('settings.exportFailed', { msg: 'share' })); }
+          }} />
         <SheetBtn danger icon={<IconTrash />} label={t('detail.deleteItem')}
           onClick={() => { setMenu(false); setDelConfirm(true); }} />
       </Sheet>
