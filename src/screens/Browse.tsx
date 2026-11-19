@@ -6,7 +6,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import {
   db, childrenOf, itemsIn, pathOf, deleteCategoryCascade, deleteItems, restoreDeleted,
-  descendantIds, uid, setCategoryImage, removeCategoryImage, recentItems, moveItems,
+  itemCountsByCategory, uid, setCategoryImage, removeCategoryImage, recentItems, moveItems,
   sortItems, sortCats, loadSort, saveSort, attentionItems, type Attention, type ItemSort,
   thumbOf, expiryState,
 } from '../db';
@@ -76,14 +76,8 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         setRecent(await recentItems(10));
         setAttention(await attentionItems());
       }
-      // 每个子目录的物品数（含所有子孙目录）
-      const cnt: Record<string, number> = {};
-      await Promise.all(
-        c.map(async (cat) => {
-          const ids = await descendantIds(cat.id);
-          cnt[cat.id] = await db.items.where('categoryId').anyOf(ids).count();
-        })
-      );
+      // 每个子目录的物品数（含所有子孙目录）：单趟聚合，避免逐目录 BFS
+      const cnt = await itemCountsByCategory();
       if (!live) return;
       setCounts(cnt);
       // 物品缩略图（优先 thumb 小图）

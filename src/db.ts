@@ -164,6 +164,29 @@ export async function descendantIds(categoryId: string): Promise<string[]> {
   return ids;
 }
 
+/**
+ * 批量统计每个目录的物品总数（含全部子孙目录）。
+ * 一趟加载目录表+物品categoryId列，内存里自底向上累加——避免逐目录 BFS 的 N+1。
+ */
+export async function itemCountsByCategory(): Promise<Record<string, number>> {
+  const [cats, itemCatIds] = await Promise.all([
+    db.categories.toArray(),
+    db.items.orderBy('categoryId').keys() as Promise<string[]>,
+  ]);
+  const parent = new Map(cats.map((c) => [c.id, c.parentId]));
+  const per = new Map<string, number>();
+  for (const cid of itemCatIds) {
+    let cur: string | undefined = cid;
+    const guard = new Set<string>();
+    while (cur && !guard.has(cur)) {
+      guard.add(cur);
+      per.set(cur, (per.get(cur) ?? 0) + 1);
+      cur = parent.get(cur);
+    }
+  }
+  return Object.fromEntries(per);
+}
+
 /** categoryId 是否为 ancestorId 的子孙（或相同），用于移动目录时防环 */
 export async function isDescendant(categoryId: string, ancestorId: string): Promise<boolean> {
   let cur = categoryId;
