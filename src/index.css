@@ -81,3 +81,33 @@ dialog.wg-sheet[open] {
   dialog { transition-duration: 0.1s; }
   dialog::backdrop { transition-duration: 0.1s; }
 }
+
+/* ---------- 视图过渡（View Transitions） ---------- */
+/* 前进：新页从右滑入、旧页轻微左移；返回：反向。共享元素 wugui-hero 自动形变 */
+@keyframes vt-slide-to-left   { to   { transform: translateX(-18%); } }
+@keyframes vt-slide-from-right{ from { transform: translateX(100%); } }
+@keyframes vt-slide-to-right  { to   { transform: translateX(100%); } }
+@keyframes vt-slide-from-left { from { transform: translateX(-18%); } }
+
+::view-transition-group(root) {
+  animation-duration: 0.28s;
+  animation-timing-function: ease-out;
+}
+html:active-view-transition-type(forward)::view-transition-old(root) { animation-name: vt-slide-to-left; }
+html:active-view-transition-type(forward)::view-transition-new(root) { animation-name: vt-slide-from-right; }
+html:active-view-transition-type(backward)::view-transition-old(root) { animation-name: vt-slide-to-right; }
+html:active-view-transition-type(backward)::view-transition-new(root) { animation-name: vt-slide-from-left; }
+
+/* 卡片图↔详情大图宽高比不同，快照撑满 pair 并保持 cover 裁切防止拉伸 */
+::view-transition-old(wugui-hero),
+::view-transition-new(wugui-hero) {
+  height: 100%;
+  object-fit: cover;
+}
+::view-transition-group(wugui-hero) { animation-duration: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}

@@ -96,6 +96,7 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
                 {...(i === 0
                   ? ({ fetchpriority: 'high' } as any)
                   : ({ fetchpriority: 'low', loading: 'lazy', decoding: 'async' } as any))}
+                style={i === 0 ? { viewTransitionName: 'wugui-hero' } : undefined}
                 className="w-full shrink-0 snap-center max-h-80 object-cover" />
             ))}
           </div>

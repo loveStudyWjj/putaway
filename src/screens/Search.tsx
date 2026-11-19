@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { db, pathTextFromMap, categoryMap, searchItems, searchCategories, thumbOf } from '../db';
 import type { Item, Category } from '../types';
 import { useNav } from '../store';
+import { setHeroEl } from '../viewnav';
 import { TopBar, IconSearch, IconBox, IconPin, IconClose, IconFolder, Empty, BottomNav } from '../ui';
 
 // 模块级记忆上次搜索词：从底部导航重新进搜索页时恢复
@@ -110,7 +111,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                 <p className="text-xs font-medium text-gray-400 mb-2">{t('search.items')}</p>
                 <div className="space-y-2">
                   {results.map((it) => (
-                    <button key={it.id} onClick={() => nav.push({ name: 'item', itemId: it.id })}
+                    <button key={it.id} onClick={(e) => {
+                      setHeroEl(e.currentTarget.querySelector('img'));
+                      nav.push({ name: 'item', itemId: it.id });
+                    }}
                       className="w-full flex items-center gap-3 bg-white dark:bg-gray-900 rounded-2xl p-3 shadow-sm active:scale-[0.99] transition-transform text-left">
                       <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center text-gray-300 dark:text-gray-600 shrink-0">
                         {imgUrls[it.id]

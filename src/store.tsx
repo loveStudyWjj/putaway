@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { viewNav } from './viewnav';
 
 export type Screen =
   | { name: 'browse'; categoryId: string }
@@ -49,17 +50,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const push = useCallback(
     (s: Screen) =>
-      setStack((st) => {
-        const next = [...st, { ...s, _k: ++seq }];
-        // 超出上限时移除根目录之上最早的一层（保证返回路径终点仍是首页）
-        if (next.length > MAX_STACK) next.splice(1, next.length - MAX_STACK);
-        return next;
-      }),
+      viewNav('forward', () =>
+        setStack((st) => {
+          const next = [...st, { ...s, _k: ++seq }];
+          // 超出上限时移除根目录之上最早的一层（保证返回路径终点仍是首页）
+          if (next.length > MAX_STACK) next.splice(1, next.length - MAX_STACK);
+          return next;
+        })
+      ),
     []
   );
-  const pop = useCallback(() => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st)), []);
-  const replace = useCallback((s: Screen) => setStack((st) => [...st.slice(0, -1), s]), []);
-  const reset = useCallback((s: Screen = ROOT) => setStack([s]), []);
+  const pop = useCallback(
+    () => viewNav('backward', () => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st))),
+    []
+  );
+  const replace = useCallback(
+    (s: Screen) => viewNav('none', () => setStack((st) => [...st.slice(0, -1), s])),
+    []
+  );
+  const reset = useCallback(
+    (s: Screen = ROOT) => viewNav('backward', () => setStack([s])),
+    []
+  );
   const bump = useCallback(() => setV((x) => x + 1), []);
   const toast = useCallback((m: string, act?: ToastAction) => {
     setMsg(m);
@@ -77,11 +89,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         (openDialogs[openDialogs.length - 1] as HTMLDialogElement).close();
         return;
       }
-      setStack((st) => {
-        if (st.length > 1) return st.slice(0, -1);
-        CapApp.exitApp();
-        return st;
-      });
+      viewNav('backward', () =>
+        setStack((st) => {
+          if (st.length > 1) return st.slice(0, -1);
+          CapApp.exitApp();
+          return st;
+        })
+      );
     });
     return () => {
       h.then((l) => l.remove());

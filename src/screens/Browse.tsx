@@ -14,6 +14,7 @@ import { cancelExpiry } from '../notify';
 import { qrPngDataUrl, categoryQrText } from '../qr';
 import type { Category, Item } from '../types';
 import { useNav, useToast, useDataVersion } from '../store';
+import { setHeroEl } from '../viewnav';
 import {
   TopBar, IconBtn, IconPlus, IconDots, IconFolder, IconBox, IconCamera, IconQr, IconCheck,
   Sheet, SheetBtn, Confirm, Empty, BottomNav, IconEdit, IconTrash, IconMove, IconImage, IconClose, IconUser, inputCls,
@@ -254,8 +255,10 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     });
   };
 
-  const onItemPress = (it: Item) => {
+  const onItemPress = (it: Item, e?: React.MouseEvent) => {
     if (selecting) { toggleSelect(it.id); return; }
+    const img = (e?.currentTarget as HTMLElement | undefined)?.querySelector('img');
+    setHeroEl((img as HTMLElement | null) ?? null);
     nav.push({ name: 'item', itemId: it.id });
   };
 
@@ -283,7 +286,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 
   const itemCard = (it: Item, small = false) => (
     <button key={it.id}
-      onClick={() => onItemPress(it)}
+      onClick={(e) => onItemPress(it, e)}
       onMouseDown={() => startLongPress(it)}
       onMouseUp={cancelLongPress}
       onMouseLeave={cancelLongPress}
