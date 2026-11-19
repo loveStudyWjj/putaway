@@ -137,6 +137,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const createCategory = async (name: string) => {
     const n = name.trim();
     if (!n) return;
+    if (cats.some((c) => c.name === n)) { toast(t('browse.nameExists')); return; }
     await db.categories.add({ id: uid(), name: n, parentId: categoryId, createdAt: Date.now() });
     bump();
     toast(t('browse.created', { name: n }));
@@ -145,6 +146,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
   const renameCategory = async (name: string) => {
     const n = name.trim();
     if (!n || !current) return;
+    if (cats.some((c) => c.name === n && c.id !== current.id)) { toast(t('browse.nameExists')); return; }
     await db.categories.update(current.id, { name: n });
     bump();
     toast(t('browse.renamed'));
@@ -161,6 +163,33 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
     });
   };
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pickTarget = useRef<'item' | 'cover'>('item');
+  const pickSource = useRef<'camera' | 'photos'>('photos');
+
+  /** web/PWA 兜底：文件选择 → dataURL 或 Blob，按目标分发 */
+  const onPickFile = async (f: File) => {
+    try {
+      if (pickTarget.current === 'item') {
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = rej;
+          r.readAsDataURL(f);
+        });
+        sessionStorage.setItem('wugui.pendingPhoto', dataUrl);
+        nav.push({ name: 'itemForm', categoryId });
+      } else {
+        const [blob, thumb] = await Promise.all([compressImage(f, 512), makeThumb(f, 256)]);
+        await setCategoryImage(categoryId, blob, thumb);
+        bump();
+        toast(t('browse.coverSet'));
+      }
+    } catch (e: any) {
+      toast(t('common.openFailed', { msg: e?.message ?? e }));
+    }
+  };
+
   const pickPhoto = async (source: 'camera' | 'photos') => {
     try {
       if (Capacitor.isNativePlatform()) {
@@ -173,6 +202,13 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         // 通过 sessionStorage 把临时照片交给表单页
         sessionStorage.setItem('wugui.pendingPhoto', `data:image/${photo.format || 'jpeg'};base64,${photo.base64String}`);
         nav.push({ name: 'itemForm', categoryId });
+      } else {
+        pickTarget.current = 'item';
+        pickSource.current = source;
+        const el = fileRef.current!;
+        if (source === 'camera') el.setAttribute('capture', 'environment');
+        else el.removeAttribute('capture');
+        el.click();
       }
     } catch (e: any) {
       if (e?.message && !/cancel/i.test(e.message)) toast(t('common.openFailed', { msg: e.message }));
@@ -181,20 +217,27 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
 
   const pickCover = async (source: 'camera' | 'photos') => {
     try {
-      const photo = await Camera.getPhoto({
-        resultType: CameraResultType.Base64,
-        source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
-        quality: 90,
-      });
-      if (!photo.base64String) return;
-      const bin = atob(photo.base64String);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      const raw = new Blob([arr], { type: `image/${photo.format || 'jpeg'}` });
-      const [blob, thumb] = await Promise.all([compressImage(raw, 512), makeThumb(raw, 256)]);
-      await setCategoryImage(categoryId, blob, thumb);
-      bump();
-      toast(t('browse.coverSet'));
+      if (Capacitor.isNativePlatform()) {
+        const photo = await Camera.getPhoto({
+          resultType: CameraResultType.Base64,
+          source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
+          quality: 90,
+        });
+        if (!photo.base64String) return;
+        const bin = atob(photo.base64String);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const raw = new Blob([arr], { type: `image/${photo.format || 'jpeg'}` });
+        const [blob, thumb] = await Promise.all([compressImage(raw, 512), makeThumb(raw, 256)]);
+        await setCategoryImage(categoryId, blob, thumb);
+        bump();
+        toast(t('browse.coverSet'));
+      } else {
+        pickTarget.current = 'cover';
+        const el = fileRef.current!;
+        el.removeAttribute('capture');
+        el.click();
+      }
     } catch (e: any) {
       if (e?.message && !/cancel/i.test(e.message)) toast(t('common.openFailed', { msg: e.message }));
     }
@@ -562,9 +605,16 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
         <SheetBtn icon={<IconImage />} label={t('common.gallery')} onClick={() => { setCoverSheet(false); pickCover('photos'); }} />
       </Sheet>
 
+      <input ref={fileRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void onPickFile(f);
+        }} />
+
       <CategoryPicker open={batchMoveOpen} onClose={() => setBatchMoveOpen(false)}
         title={t('picker.moveTo')} onPick={batchMove} />
-      <Confirm open={batchDelConfirm} danger title={t('browse.deleteCatTitle')}
+      <Confirm open={batchDelConfirm} danger title={t('browse.deleteItemsTitle')}
         desc={t('browse.deletedN', { count: selected.size })} okText={t('common.delete')}
         onCancel={() => setBatchDelConfirm(false)} onOk={batchDelete} />
 

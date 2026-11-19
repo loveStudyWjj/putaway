@@ -31,6 +31,7 @@ export default {
     batchDone_one: 'Moved {{count}} item', batchDone_other: 'Moved {{count}} items',
     deletedN_one: 'Deleted {{count}} item', deletedN_other: 'Deleted {{count}} items',
     selectAll: 'Select all',
+    nameExists: 'A folder with this name already exists', deleteItemsTitle: 'Delete selected items?',
     scanQr: 'Scan', qrLabel: 'QR label', qrLabelDesc: 'Print it on the box — scanning opens this folder',
     shareQr: 'Share / save image',
     lentBadge: 'Lent', expired: 'Expired', expirySoon: 'Expiring',

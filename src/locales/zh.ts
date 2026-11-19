@@ -28,6 +28,7 @@ export default {
     cantMoveSelf: '不能移动到自身',
     recent: '最近添加', batch: '批量管理', batchDone: '已移动 {{count}} 件物品',
     deletedN: '已删除 {{count}} 件物品', selectAll: '全选',
+    nameExists: '已存在同名目录', deleteItemsTitle: '删除选中的物品？',
     scanQr: '扫码', qrLabel: '二维码标签', qrLabelDesc: '打印贴在箱子/柜子上，扫码直达此目录',
     shareQr: '分享/保存图片',
     lentBadge: '借出', expired: '已过期', expirySoon: '临期',
