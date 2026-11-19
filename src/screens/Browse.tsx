@@ -295,7 +295,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
       } ${selected.has(it.id) ? 'ring-2 ring-brand-500' : ''}`}>
       <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-300 dark:text-gray-600">
         {imgUrls[it.id]
-          ? <img src={imgUrls[it.id]} className="w-full h-full object-cover" />
+          ? <img src={imgUrls[it.id]} loading="lazy" decoding="async" className="w-full h-full object-cover" />
           : <IconBox className="w-8 h-8" />}
         {/* 借出角标 */}
         {it.lentTo && (
@@ -379,7 +379,7 @@ export function BrowseScreen({ categoryId }: { categoryId: string }) {
                     className="flex items-center gap-3 bg-white dark:bg-gray-900 rounded-2xl p-3.5 shadow-sm active:scale-[0.98] transition-transform text-left">
                     <div className="w-11 h-11 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 flex items-center justify-center shrink-0 overflow-hidden">
                       {catImgUrls[c.id]
-                        ? <img src={catImgUrls[c.id]} className="w-full h-full object-cover" />
+                        ? <img src={catImgUrls[c.id]} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         : <IconFolder />}
                     </div>
                     <div className="min-w-0">

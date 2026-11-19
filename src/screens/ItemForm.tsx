@@ -235,7 +235,7 @@ export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; catego
             <div className="flex gap-2.5 overflow-x-auto pb-1">
               {photos.map((p, i) => (
                 <div key={p.id ?? i} className="relative shrink-0 w-36 aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800">
-                  <img src={p.url} className="w-full h-full object-cover" />
+                  <img src={p.url} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   {aiLoading && i === photos.length - 1 && (
                     <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-1.5">
                       <Spinner className="w-6 h-6" />

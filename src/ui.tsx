@@ -114,20 +114,53 @@ export function IconBtn({ onClick, children, label }: {
   );
 }
 
+// ---------- 原生 <dialog> 控制 ----------
+// open → showModal()/close()；closedby 未支持的老 WebView 用指针坐标兜底实现点击外部关闭
+function useDialogRef(open: boolean) {
+  const ref = React.useRef<HTMLDialogElement>(null);
+  React.useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (open && !d.open) d.showModal();
+    else if (!open && d.open) d.close();
+  }, [open]);
+  React.useEffect(() => {
+    const d = ref.current;
+    if (!d || 'closedBy' in HTMLDialogElement.prototype) return;
+    const outside = (e: PointerEvent) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    const onDown = (e: PointerEvent) => { pressedOutside = outside(e); };
+    const onUp = (e: PointerEvent) => { if (pressedOutside && outside(e)) d.close(); };
+    d.addEventListener('pointerdown', onDown);
+    d.addEventListener('pointerup', onUp);
+    return () => {
+      d.removeEventListener('pointerdown', onDown);
+      d.removeEventListener('pointerup', onUp);
+    };
+  }, []);
+  return ref;
+}
+
+const CLOSED_BY_ANY = { closedby: 'any' } as any;
+
 // ---------- 底部动作面板 ----------
 export function Sheet({ open, onClose, title, children }: {
   open: boolean; onClose: () => void; title?: string; children: React.ReactNode;
 }) {
-  if (!open) return null;
+  const ref = useDialogRef(open);
+  const titleId = React.useId();
   return (
-    <div className="fixed inset-0 z-50" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40" />
-      <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-[slideUp_.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}>
-        {title && <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 px-1">{title}</p>}
+    <dialog ref={ref} {...CLOSED_BY_ANY} className="wg-sheet"
+      aria-labelledby={title ? titleId : undefined}
+      onClose={onClose}>
+      <div className="bg-white dark:bg-gray-900 rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] max-h-[80dvh] overflow-y-auto">
+        {title && <p id={titleId} className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 px-1">{title}</p>}
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -152,24 +185,31 @@ export function Confirm({ open, title, desc, okText, danger, onOk, onCancel }: {
   onOk: () => void; onCancel: () => void;
 }) {
   const { t } = useTranslation();
-  if (!open) return null;
+  const ref = useDialogRef(open);
+  const titleId = React.useId();
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-8" onClick={onCancel}>
-      <div className="absolute inset-0 bg-black/40" />
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-5 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+    <dialog ref={ref} {...CLOSED_BY_ANY} aria-labelledby={titleId}
+      onClose={(e) => {
+        const d = e.currentTarget;
+        const v = d.returnValue;
+        d.returnValue = '';
+        if (v === 'ok') onOk(); else onCancel();
+      }}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 w-[85vw] max-w-xs">
+        <h3 id={titleId} className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
         {desc && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">{desc}</p>}
-        <div className="flex gap-2 mt-5">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[15px] font-medium active:bg-gray-200 dark:active:bg-gray-700">
+        <form method="dialog" className="flex gap-2 mt-5">
+          <button value="cancel" autoFocus
+            className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[15px] font-medium active:bg-gray-200 dark:active:bg-gray-700">
             {t('common.cancel')}
           </button>
-          <button onClick={onOk}
+          <button value="ok"
             className={`flex-1 py-2.5 rounded-xl text-white text-[15px] font-medium ${danger ? 'bg-red-500 active:bg-red-600' : 'bg-brand-600 active:bg-brand-700'}`}>
             {okText ?? t('common.ok')}
           </button>
-        </div>
+        </form>
       </div>
-    </div>
+    </dialog>
   );
 }
 

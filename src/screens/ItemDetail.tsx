@@ -93,6 +93,9 @@ export function ItemDetailScreen({ itemId }: { itemId: string }) {
             className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth" style={{ scrollbarWidth: 'none' }}>
             {imgUrls.map((u, i) => (
               <img key={i} src={u}
+                {...(i === 0
+                  ? ({ fetchpriority: 'high' } as any)
+                  : ({ fetchpriority: 'low', loading: 'lazy', decoding: 'async' } as any))}
                 className="w-full shrink-0 snap-center max-h-80 object-cover" />
             ))}
           </div>

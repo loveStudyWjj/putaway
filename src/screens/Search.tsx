@@ -114,7 +114,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                       className="w-full flex items-center gap-3 bg-white dark:bg-gray-900 rounded-2xl p-3 shadow-sm active:scale-[0.99] transition-transform text-left">
                       <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center text-gray-300 dark:text-gray-600 shrink-0">
                         {imgUrls[it.id]
-                          ? <img src={imgUrls[it.id]} className="w-full h-full object-cover" />
+                          ? <img src={imgUrls[it.id]} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                           : <IconBox className="w-6 h-6" />}
                       </div>
                       <div className="flex-1 min-w-0">

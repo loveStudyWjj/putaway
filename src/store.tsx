@@ -68,10 +68,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     timer.current = setTimeout(() => { setMsg(''); setAction(undefined); }, act ? 6000 : 2500);
   }, []);
 
-  // 安卓返回键：弹栈，栈空则退出
+  // 安卓返回键：先关顶层弹层，再弹导航栈，栈空则退出
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const h = CapApp.addListener('backButton', () => {
+      const openDialogs = document.querySelectorAll('dialog[open]');
+      if (openDialogs.length) {
+        (openDialogs[openDialogs.length - 1] as HTMLDialogElement).close();
+        return;
+      }
       setStack((st) => {
         if (st.length > 1) return st.slice(0, -1);
         CapApp.exitApp();

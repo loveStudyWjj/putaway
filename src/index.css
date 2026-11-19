@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* 让原生 UI（滚动条/表单控件/画布底色）跟随当前主题 */
+  color-scheme: light dark;
+  accent-color: #4f46e5;
+}
+html.dark { color-scheme: dark; }
+html:not(.dark) { color-scheme: light; }
+
 html {
   -webkit-tap-highlight-color: transparent;
 }
@@ -15,7 +23,6 @@ body {
 }
 html.dark body {
   background: #030712;
-  color-scheme: dark;
 }
 
 input, textarea {
@@ -23,7 +30,54 @@ input, textarea {
   -webkit-user-select: text;
 }
 
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+/* ---------- 原生 <dialog> 弹层 ---------- */
+dialog {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  max-width: 100vw;
+  max-height: 100dvh;
+  /* 顶层元素进出场动画：display/overlay 需要离散过渡 */
+  opacity: 0;
+  transition-property: opacity, transform, display, overlay;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+  transition-behavior: allow-discrete;
+}
+dialog[open] {
+  opacity: 1;
+  @starting-style { opacity: 0; }
+}
+dialog::backdrop {
+  background-color: rgb(0 0 0 / 0.45);
+  /* ::backdrop 默认非滚动容器，需 overflow:hidden 才能承接 overscroll-behavior */
+  overflow: hidden;
+  overscroll-behavior: contain;
+  transition-property: background-color, display, overlay;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+  transition-behavior: allow-discrete;
+}
+dialog[open]::backdrop {
+  @starting-style { background-color: transparent; }
+}
+/* 弹层滚动不穿透到背后页面 */
+dialog:modal { overscroll-behavior: contain; }
+
+/* 底部动作面板：贴底 + 上滑入场 */
+dialog.wg-sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 40rem;
+  transform: translateY(100%);
+}
+dialog.wg-sheet[open] {
+  transform: translateY(0);
+  @starting-style { transform: translateY(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog { transition-duration: 0.1s; }
+  dialog::backdrop { transition-duration: 0.1s; }
 }
