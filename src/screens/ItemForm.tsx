@@ -1,0 +1,393 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+import { db, uid, saveItem, pathText, ensureCategoryPath, getItemImages } from '../db';
+import type { Item } from '../types';
+import { useNav, useToast, useDataVersion } from '../store';
+import { compressImage, blobToBase64 } from '../image';
+import { recognizeItem } from '../ai';
+import { loadSettings } from '../settings';
+import { CategoryPicker } from '../CategoryPicker';
+import {
+  TopBar, Field, inputCls, IconCamera, IconImage, IconSparkle, IconPlus, IconClose, Spinner,
+  Sheet, SheetBtn,
+} from '../ui';
+
+interface PhotoEntry {
+  /** 已存在的 imageId（编辑态）；新图为 undefined */
+  id?: string;
+  blob: Blob;
+  url: string;
+}
+
+export function ItemFormScreen({ itemId, categoryId }: { itemId?: string; categoryId?: string }) {
+  const nav = useNav();
+  const { toast } = useToast();
+  const { bump } = useDataVersion();
+
+  const [item, setItem] = useState<Item | null>(null);
+  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
+  const [compressing, setCompressing] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [catLabel, setCatLabel] = useState('根目录');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [suggestPath, setSuggestPath] = useState('');
+  const [addSheet, setAddSheet] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pickSource = useRef<'camera' | 'photos'>('photos');
+  const aiRan = useRef(false);
+  const photoUrls = useRef<string[]>([]);
+
+  const trackUrl = (u: string) => {
+    photoUrls.current.push(u);
+    return u;
+  };
+
+  // 载入：编辑模式取物品，新建模式建草稿
+  useEffect(() => {
+    (async () => {
+      if (itemId) {
+        const it = await db.items.get(itemId);
+        if (!it) { toast('物品不存在'); nav.pop(); return; }
+        setItem(it);
+        const blobs = await getItemImages(it);
+        setPhotos(
+          blobs.map((blob, i) => ({ id: it.imageIds[i], blob, url: trackUrl(URL.createObjectURL(blob)) }))
+        );
+        setCatLabel(await pathText(it.categoryId));
+      } else {
+        setItem({
+          id: uid(), name: '', categoryId: categoryId ?? '',
+          description: '', attributes: {}, quantity: 1, tags: [],
+          imageIds: [], createdAt: Date.now(), updatedAt: Date.now(),
+        });
+        setCatLabel(await pathText(categoryId ?? ''));
+      }
+    })();
+  }, [itemId, categoryId]);
+
+  // 浏览页传来的待识别照片
+  useEffect(() => {
+    if (!item || itemId) return;
+    const pending = sessionStorage.getItem('wugui.pendingPhoto');
+    if (!pending) return;
+    sessionStorage.removeItem('wugui.pendingPhoto');
+    (async () => {
+      const blob = await (await fetch(pending)).blob();
+      await applyPhoto(blob, true);
+    })();
+  }, [item]);
+
+  useEffect(
+    () => () => {
+      photoUrls.current.forEach((u) => URL.revokeObjectURL(u));
+    },
+    []
+  );
+
+  const applyPhoto = async (raw: Blob, runAi: boolean) => {
+    setCompressing(true);
+    try {
+      const blob = await compressImage(raw);
+      const entry: PhotoEntry = { blob, url: trackUrl(URL.createObjectURL(blob)) };
+      setPhotos((prev) => [...prev, entry]);
+      // 仅新建物品时自动识别；编辑已有物品需手动点「AI 识别」
+      if (runAi && !itemId && !aiRan.current) {
+        aiRan.current = true;
+        runRecognize(blob);
+      }
+    } catch (e: any) {
+      toast(e?.message ?? '图片处理失败');
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const pickNative = async (source: 'camera' | 'photos') => {
+    try {
+      const photo = await Camera.getPhoto({
+        resultType: CameraResultType.Base64,
+        source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
+        quality: 90,
+      });
+      if (!photo.base64String) return;
+      const bin = atob(photo.base64String);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      await applyPhoto(new Blob([arr], { type: `image/${photo.format || 'jpeg'}` }), true);
+    } catch (e: any) {
+      if (e?.message && !/cancel/i.test(e.message)) toast(`打开失败：${e.message}`);
+    }
+  };
+
+  const pick = (source: 'camera' | 'photos') => {
+    if (Capacitor.isNativePlatform()) {
+      pickNative(source);
+    } else {
+      pickSource.current = source;
+      const el = fileRef.current!;
+      if (source === 'camera') el.setAttribute('capture', 'environment');
+      else el.removeAttribute('capture');
+      el.click();
+    }
+  };
+
+  const removePhoto = (idx: number) => {
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [gone] = next.splice(idx, 1);
+      if (gone) URL.revokeObjectURL(gone.url);
+      return next;
+    });
+  };
+
+  const runRecognize = async (blob?: Blob) => {
+    const b = blob ?? photos[photos.length - 1]?.blob;
+    if (!b || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const b64 = await blobToBase64(b);
+      const r = await recognizeItem(b64, loadSettings());
+      setItem((it) => {
+        if (!it) return it;
+        return {
+          ...it,
+          name: it.name || r.name,
+          description: it.description || r.description,
+          quantity: it.quantity > 1 ? it.quantity : r.quantity,
+          attributes: { ...r.attributes, ...it.attributes },
+          tags: Array.from(new Set([...r.tags, ...it.tags])).slice(0, 8),
+        };
+      });
+      if (r.categoryPath) setSuggestPath(r.categoryPath);
+      toast('识别完成，可修改后保存');
+    } catch (e: any) {
+      aiRan.current = false;
+      toast(e?.message ?? '识别失败');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const save = async () => {
+    if (!item) return;
+    if (!item.name.trim()) { toast('请填写物品名称'); return; }
+    setSaving(true);
+    try {
+      await saveItem(item, photos.map((p) => (p.id ? { id: p.id } : { blob: p.blob })));
+      bump();
+      toast('已保存');
+      nav.pop();
+    } catch (e: any) {
+      toast(`保存失败：${e?.message ?? e}`);
+      setSaving(false);
+    }
+  };
+
+  const setAttr = (k: string, v: string) =>
+    setItem((it) => it && { ...it, attributes: { ...it.attributes, [k]: v } });
+  const delAttr = (k: string) =>
+    setItem((it) => {
+      if (!it) return it;
+      const a = { ...it.attributes };
+      delete a[k];
+      return { ...it, attributes: a };
+    });
+  const renameAttr = (oldK: string, newK: string, v: string) =>
+    setItem((it) => {
+      if (!it || !newK.trim() || newK === oldK) return it;
+      const entries = Object.entries(it.attributes).map(([k, val]) => (k === oldK ? [newK.trim(), v] : [k, val]));
+      return { ...it, attributes: Object.fromEntries(entries) };
+    });
+
+  const [tagDraft, setTagDraft] = useState('');
+  const addTag = () => {
+    const t = tagDraft.trim();
+    if (!t) return;
+    setItem((it) => it && { ...it, tags: Array.from(new Set([...it.tags, t])).slice(0, 8) });
+    setTagDraft('');
+  };
+
+  if (!item) return <div className="min-h-screen bg-white" />;
+
+  return (
+    <div className="min-h-screen bg-white pb-[calc(2rem+env(safe-area-inset-bottom))]">
+      <TopBar title={itemId ? '编辑物品' : '添加物品'} onBack={nav.pop}
+        right={<button onClick={save} disabled={saving}
+          className="px-4 py-1.5 mr-1 rounded-full bg-brand-600 text-white text-sm font-medium disabled:opacity-50">
+          {saving ? '保存中' : '保存'}
+        </button>} />
+
+      {/* 照片区 */}
+      <div className="p-4">
+        {photos.length > 0 || compressing ? (
+          <>
+            <div className="flex gap-2.5 overflow-x-auto pb-1">
+              {photos.map((p, i) => (
+                <div key={p.id ?? i} className="relative shrink-0 w-36 aspect-square rounded-2xl overflow-hidden bg-gray-100">
+                  <img src={p.url} className="w-full h-full object-cover" />
+                  {aiLoading && i === photos.length - 1 && (
+                    <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white gap-1.5">
+                      <Spinner className="w-6 h-6" />
+                      <span className="text-[11px]">识别中</span>
+                    </div>
+                  )}
+                  <button onClick={() => removePhoto(i)}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center">
+                    <IconClose className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              {compressing && (
+                <div className="shrink-0 w-36 aspect-square rounded-2xl bg-gray-100 flex flex-col items-center justify-center gap-1.5 text-gray-400">
+                  <Spinner className="w-6 h-6" />
+                  <span className="text-[11px]">处理中…</span>
+                </div>
+              )}
+              <button onClick={() => setAddSheet(true)}
+                className="shrink-0 w-36 aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1.5 text-gray-300 active:border-brand-500 active:text-brand-500">
+                <IconPlus className="w-7 h-7" />
+                <span className="text-xs">加照片</span>
+              </button>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => runRecognize()} disabled={aiLoading}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-brand-50 text-brand-600 text-[13px] font-medium disabled:opacity-60">
+                <IconSparkle className="w-4 h-4" /> {aiLoading ? 'AI 识别中…' : 'AI 识别（用最后一张，不覆盖已填项）'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center">
+              <IconCamera className="w-7 h-7" />
+            </div>
+            <p className="text-sm text-gray-400">拍张照片，AI 帮你填信息</p>
+            <div className="flex gap-2">
+              <button onClick={() => pick('camera')}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-medium">
+                <IconCamera className="w-4 h-4" /> 拍照
+              </button>
+              <button onClick={() => pick('photos')}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
+                <IconImage className="w-4 h-4" /> 相册
+              </button>
+            </div>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) applyPhoto(f, true);
+            e.target.value = '';
+          }} />
+      </div>
+
+      <div className="px-4">
+        <Field label="名称">
+          <input className={inputCls} value={item.name} placeholder="例如：Switch 游戏机"
+            onChange={(e) => setItem({ ...item, name: e.target.value })} />
+        </Field>
+
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <Field label="存放位置">
+              <button onClick={() => setPickerOpen(true)}
+                className={`${inputCls} text-left flex items-center justify-between`}>
+                <span className="truncate">{catLabel}</span>
+                <span className="text-gray-400 text-xs shrink-0 ml-2">更换</span>
+              </button>
+            </Field>
+          </div>
+          <Field label="数量">
+            <div className="flex items-center gap-3 h-[46px]">
+              <button onClick={() => setItem({ ...item, quantity: Math.max(1, item.quantity - 1) })}
+                className="w-10 h-10 rounded-xl bg-gray-100 text-lg text-gray-600 active:bg-gray-200">−</button>
+              <span className="w-8 text-center font-medium">{item.quantity}</span>
+              <button onClick={() => setItem({ ...item, quantity: item.quantity + 1 })}
+                className="w-10 h-10 rounded-xl bg-gray-100 text-lg text-gray-600 active:bg-gray-200">＋</button>
+            </div>
+          </Field>
+        </div>
+
+        {suggestPath && (
+          <button
+            onClick={async () => {
+              const id = await ensureCategoryPath(suggestPath);
+              setItem({ ...item, categoryId: id });
+              setCatLabel(await pathText(id));
+              setSuggestPath('');
+              toast(`已移到「${suggestPath}」`);
+            }}
+            className="w-full mb-4 flex items-center gap-2 px-3.5 py-3 rounded-xl bg-brand-50 text-brand-700 text-sm text-left active:bg-brand-100">
+            <IconSparkle className="w-4 h-4 shrink-0" />
+            <span className="flex-1">AI 建议分类：<b>{suggestPath}</b>（点击应用）</span>
+          </button>
+        )}
+
+        <Field label="描述">
+          <textarea className={`${inputCls} resize-none`} rows={2} value={item.description}
+            placeholder="一句话备注（可选）"
+            onChange={(e) => setItem({ ...item, description: e.target.value })} />
+        </Field>
+
+        {/* 属性 */}
+        <div className="mb-4">
+          <span className="block text-[13px] font-medium text-gray-500 mb-1.5">属性</span>
+          {Object.entries(item.attributes).map(([k, v], i) => (
+            <div key={i} className="flex gap-2 mb-2 items-center">
+              <input className={`${inputCls} !w-[38%]`} defaultValue={k} placeholder="属性名"
+                onBlur={(e) => renameAttr(k, e.target.value, item.attributes[k])} />
+              <input className={inputCls} value={v} placeholder="值"
+                onChange={(e) => setAttr(k, e.target.value)} />
+              <button onClick={() => delAttr(k)} className="p-2 text-gray-300 active:text-red-500 shrink-0">
+                <IconClose className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <button onClick={() => setAttr(`属性${Object.keys(item.attributes).length + 1}`, '')}
+            className="flex items-center gap-1 text-sm text-brand-600 py-1.5 active:opacity-60">
+            <IconPlus className="w-4 h-4" /> 添加属性
+          </button>
+        </div>
+
+        {/* 标签 */}
+        <div className="mb-6">
+          <span className="block text-[13px] font-medium text-gray-500 mb-1.5">标签</span>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {item.tags.map((t) => (
+              <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-[13px] text-gray-600">
+                {t}
+                <button onClick={() => setItem({ ...item, tags: item.tags.filter((x) => x !== t) })}>
+                  <IconClose className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input className={inputCls} value={tagDraft} placeholder="输入标签后回车"
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())} />
+            <button onClick={addTag} className="px-4 rounded-xl bg-gray-100 text-gray-600 text-sm shrink-0">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <Sheet open={addSheet} onClose={() => setAddSheet(false)} title="添加照片">
+        <SheetBtn icon={<IconCamera />} label="拍照"
+          onClick={() => { setAddSheet(false); pick('camera'); }} />
+        <SheetBtn icon={<IconImage />} label="从相册选择"
+          onClick={() => { setAddSheet(false); pick('photos'); }} />
+      </Sheet>
+
+      <CategoryPicker open={pickerOpen} onClose={() => setPickerOpen(false)}
+        title="存放位置"
+        onPick={async (id) => {
+          setItem({ ...item, categoryId: id });
+          setCatLabel(await pathText(id));
+          setPickerOpen(false);
+        }} />
+    </div>
+  );
+}
