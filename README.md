@@ -25,23 +25,23 @@ android/           Capacitor Android 工程
 
 ## 构建 APK
 
-需要 JDK 21、Android SDK（platform 35）。在本机已就绪的情况下：
+需要 JDK 21、Android SDK（platform 35）。JDK/SDK 路径从环境变量 `JAVA_HOME`/`ANDROID_HOME` 读取，未设置时回退读 `.env`（gitignore 的本地配置）：
+
+```dotenv
+# .env
+JAVA_HOME=C:\Program Files\Java\jdk-21
+ANDROID_HOME=C:\Android\Sdk
+```
+
+一键构建（Windows cmd）：
 
 ```bash
 npm install
-npm run build          # vite 构建到 dist/
-npx cap sync android   # 拷贝到安卓工程
-cd android
-set JAVA_HOME=C:\Program Files\Java\jdk-21   # 按本机实际路径
-gradlew assembleDebug
-# 产物：android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-或一键（Windows cmd）：
-
-```bash
 build-apk.bat
+# 产物：android/app/build/outputs/apk/debug/app-debug.apk → 复制为根目录 wugui.apk
 ```
+
+或手动分步：`npm run build` → `npx cap sync android` → `cd android && gradlew assembleDebug`。
 
 ## AI 配置
 
